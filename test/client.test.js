@@ -392,6 +392,20 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
   })
   assert.equal(rendered.type, 'div')
   assert.equal(rendered.props.children.length, 6, 'colour, corner, sound, volume, duration, footer')
+
+  // The buttons must carry their label as children: jsx's third argument is the
+  // key, and passing the label there renders empty pills.
+  const positionChoice = rendered.props.children[1].props.children[1]
+  assert.equal(positionChoice.props.children.length, 2)
+  assert.equal(positionChoice.props.children[0].props.children, 'positionBottomRight')
+  assert.equal(positionChoice.props.children[1].props.children, 'positionTopRight')
+
+  const soundRow = rendered.props.children[2].props.children[1]
+  const soundButtons = soundRow.props.children[0].props.children
+  assert.deepEqual(
+    soundButtons.map((button) => button.props.children),
+    ['presetChime', 'presetBeep', 'presetRise'],
+  )
 })
 
 test('a missing configForms service never breaks the badge', async () => {

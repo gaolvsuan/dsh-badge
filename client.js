@@ -436,7 +436,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.6.2', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.6.3', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -556,6 +556,7 @@ window.__ModuleLoader__.load({
 
       function tag(text) {
         return jsx('span', {
+          children: text,
           style: {
             marginLeft: 8,
             padding: '1px 6px',
@@ -564,7 +565,7 @@ window.__ModuleLoader__.load({
             fontWeight: 500,
             background: 'rgba(128,128,128,0.18)',
           },
-        }, text)
+        })
       }
 
       function choice(options, current, onPick, disabled) {
@@ -574,10 +575,12 @@ window.__ModuleLoader__.load({
             var active = option.value === current
             return jsx('button', {
               type: 'button',
+              key: option.value,
               disabled: disabled,
               onClick: function () {
                 onPick(option.value)
               },
+              children: option.label,
               style: {
                 padding: '6px 14px',
                 borderRadius: 8,
@@ -589,7 +592,7 @@ window.__ModuleLoader__.load({
                 border: '1px solid ' + (active ? 'currentColor' : 'rgba(128,128,128,0.35)'),
                 background: active ? 'rgba(128,128,128,0.16)' : 'transparent',
               },
-            }, option.label)
+            })
           }),
         })
       }
@@ -673,6 +676,7 @@ window.__ModuleLoader__.load({
                 var active = value.toLowerCase() === color.toLowerCase()
                 return jsx('button', {
                   type: 'button',
+                  key: value,
                   disabled: !writable,
                   title: value,
                   onClick: function () {
@@ -687,7 +691,7 @@ window.__ModuleLoader__.load({
                     cursor: writable ? 'pointer' : 'default',
                     border: active ? '2px solid currentColor' : '2px solid rgba(128,128,128,0.25)',
                   },
-                }, value)
+                })
               }).concat([
                 jsx('input', {
                   type: 'color',
@@ -746,6 +750,7 @@ window.__ModuleLoader__.load({
                   onClick: function () {
                     playSound('done', { sound: true, soundPreset: preset, volume: volume, soundUrl: '' })
                   },
+                  children: translate('preview'),
                   style: {
                     padding: '6px 14px',
                     borderRadius: 8,
@@ -756,7 +761,7 @@ window.__ModuleLoader__.load({
                     border: '1px dashed rgba(128,128,128,0.45)',
                     background: 'transparent',
                   },
-                }, translate('preview')),
+                }),
               ],
             }),
             jsx('p', { style: HINT }, translate('soundPresetHint')),
@@ -794,7 +799,7 @@ window.__ModuleLoader__.load({
         var durationRow = jsxs('div', {
           style: ROW,
           children: [
-            heading('minTurnDurationMs', 'minTurnDuration'),
+            heading('minTurnDurationMs', 'minTurnDurationMs'),
             jsx('input', {
               type: 'number',
               min: 0,
@@ -823,15 +828,18 @@ window.__ModuleLoader__.load({
           style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 22 },
           children: [
             !writable
-              ? jsx('span', { style: { fontSize: 12, opacity: 0.6 } }, translate('readOnly'))
-              : jsx('span', { style: { fontSize: 12, opacity: 0.6 } },
-                snapshot.saving === true ? translate('saving') : translate('autoSaved')),
+              ? jsx('span', { children: translate('readOnly'), style: { fontSize: 12, opacity: 0.6 } })
+              : jsx('span', {
+                children: snapshot.saving === true ? translate('saving') : translate('autoSaved'),
+                style: { fontSize: 12, opacity: 0.6 },
+              }),
             snapshot.saveFailed
               ? jsx('button', {
                 type: 'button',
                 onClick: function () {
                   props.save()
                 },
+                children: translate('retrySave'),
                 style: {
                   padding: '5px 12px',
                   borderRadius: 8,
@@ -842,7 +850,7 @@ window.__ModuleLoader__.load({
                   background: 'transparent',
                   border: '1px solid rgba(128,128,128,0.35)',
                 },
-              }, translate('retrySave'))
+              })
               : null,
           ],
         })
