@@ -155,6 +155,31 @@
     document.getElementById('reset').addEventListener('click', function () {
       window.__DSH_BADGE_NOTIFY__.clear()
     })
+
+    // ?auto=1 自动跑一遍「开始回合 → 结束回合」，把结果写进 DOM，
+    // 供无头浏览器 --dump-dom 抓取，用来验证真实浏览器里的行为。
+    if (location.search.indexOf('auto') >= 0) {
+      var report
+      try {
+        sessions.set({ running: true })
+        sessions.set({ running: false })
+        var api = window.__DSH_BADGE_NOTIFY__
+        var href = document.querySelector('link[rel~="icon"]').getAttribute('href') || ''
+        report = {
+          ok: true,
+          count: api.getCount(),
+          title: document.title,
+          faviconIsPng: href.indexOf('data:image/png') === 0,
+          faviconLength: href.length
+        }
+      } catch (error) {
+        report = { ok: false, error: String(error && error.message ? error.message : error) }
+      }
+      var pre = document.createElement('pre')
+      pre.id = 'report'
+      pre.textContent = JSON.stringify(report)
+      document.body.appendChild(pre)
+    }
   </script>
 </body>
 </html>

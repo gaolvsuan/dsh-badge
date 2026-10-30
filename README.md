@@ -89,6 +89,13 @@ __DSH_BADGE_NOTIFY__.sound()   // 只试听音效
 
 `demo/index.html` 是一个独立演示页，直接双击打开即可。它加载仓库里真实的 `client.js`，只把 DSH 的 sessions 服务换成假数据，用来单独验证角标和音效。
 
+带上 `?auto=1` 时，演示页会自动跑一遍「开始回合 → 结束回合」，把结果写进 `<pre id="report">`，可以用无头浏览器抓取：
+
+```bash
+chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
+  --dump-dom "file:///…/demo/index.html?auto=1"
+```
+
 ## 开发
 
 ```bash
