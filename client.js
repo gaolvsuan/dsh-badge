@@ -459,7 +459,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.1', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.8.2', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -905,7 +905,36 @@ window.__ModuleLoader__.load({
               }
             }
           }
-          var controller = new BadgeCardController(configForms.get(namespace))
+          var scope = configForms.get(namespace)
+          var controller = new BadgeCardController(scope)
+
+          // Volatile fields are not serialized into the browser bundle, so the
+          // config the page boots with holds only their defaults. The accepted
+          // values live on the settings scope; adopt them and follow changes.
+          try {
+            var applyAccepted = function () {
+              if (!scope || typeof scope.getSnapshot !== 'function') return
+              var accepted = scope.getSnapshot()
+              var values = accepted && accepted.value
+              if (!values || typeof values !== 'object') return
+              var patch = {}
+              for (var key in values) {
+                if (Object.prototype.hasOwnProperty.call(values, key)) patch[key] = values[key]
+              }
+              if (!state.cfg) return
+              state.cfg = Object.assign({}, state.cfg, patch)
+              if (state.unread > 0) paint()
+            }
+            applyAccepted()
+            if (typeof scope.subscribe === 'function') {
+              ctx.effect(function () {
+                return scope.subscribe(applyAccepted)
+              }, 'dsh-badge: accepted config')
+            }
+          } catch (error) {
+            DIAG.reason = 'scope read failed: ' + (error && error.message)
+          }
+
           // `plugins.item` is the official-plugin list; a community bundle gets
           // its form from `plugins.bundle.config`, keyed by the package name.
           var remove = slots.inject('plugins.bundle.config', function () {
@@ -954,7 +983,10 @@ window.__ModuleLoader__.load({
       // Manual hooks: `__DSH_BADGE__.test(3)` in the devtools console,
       // and the same surface the demo page drives.
       window.__DSH_BADGE__ = {
-        config: cfg,
+        // Live values, not the boot copy: the settings scope replaces state.cfg.
+        get config() {
+          return state.cfg
+        },
         diag: DIAG,
         test: function (count) {
           state.unread = typeof count === 'number' && count > 0 ? Math.floor(count) : 1

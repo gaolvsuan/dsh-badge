@@ -327,17 +327,28 @@ function createSettingsStubs() {
     },
   }
 
+  // Accepted values the Host would report through the settings scope.
+  const accepted = { soundPreset: 'rise', volume: 1, badgeColor: '#8b5cf6' }
+  const scopeSubscribers = []
+
   const configForms = {
     whileServed(namespaces, register) {
       calls.namespaces = namespaces
       return register(new Set(['badge']))
     },
     get(namespace) {
-      return { namespace }
+      return {
+        namespace,
+        getSnapshot: () => ({ value: accepted }),
+        subscribe: (listener) => {
+          scopeSubscribers.push(listener)
+          return () => {}
+        },
+      }
     },
   }
 
-  return { calls, require, locale, slots, configForms }
+  return { calls, require, locale, slots, configForms, accepted, scopeSubscribers }
 }
 
 function makeSettingsCtx(sessions, stubs) {
@@ -426,6 +437,24 @@ test('unwraps volatile references handed over by the loader', async () => {
   assert.equal(cfg.soundPreset, 'rise')
   assert.equal(cfg.volume, 0.8)
   assert.equal(cfg.minTurnDurationMs, 0)
+})
+
+test('adopts accepted settings values the bundle cannot carry', async () => {
+  const stubs = createSettingsStubs()
+  const { env, mod } = await loadClient({ require: stubs.require })
+  const sessions = createSessions()
+
+  // Volatile fields never reach the browser bundle, so the boot config only
+  // holds their defaults; the settings scope is where the real values live.
+  mod.apply(makeSettingsCtx(sessions, stubs), { minTurnDurationMs: 0 })
+
+  assert.equal(env.window.__DSH_BADGE__.config.soundPreset, 'rise')
+  assert.equal(env.window.__DSH_BADGE__.config.volume, 1)
+  assert.equal(env.window.__DSH_BADGE__.config.badgeColor, '#8b5cf6')
+
+  stubs.accepted.volume = 0.2
+  for (const listener of stubs.scopeSubscribers) listener()
+  assert.equal(env.window.__DSH_BADGE__.config.volume, 0.2)
 })
 
 test('a missing configForms service never breaks the badge', async () => {
