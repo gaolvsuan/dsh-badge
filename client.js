@@ -228,7 +228,10 @@ window.__ModuleLoader__.load({
 
     function schedule(ac, cfg, kind) {
       var now = ac.currentTime + 0.02
-      var vol = cfg.volume * 0.4
+      // Perceptual rather than linear: a linear 0.15 against 1.0 reads as the
+      // same short blip on small speakers, so the low end is pulled down harder.
+      var vol = Math.pow(Math.min(1, Math.max(0, cfg.volume)), 1.6) * 0.9
+      state.lastChime = { volume: cfg.volume, preset: cfg.soundPreset, kind: kind, gain: vol }
 
       if (kind === 'error') {
         tone(ac, 392.0, now, 0.22, 'triangle', vol)
@@ -456,7 +459,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.0', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.8.1', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -968,6 +971,9 @@ window.__ModuleLoader__.load({
         },
         getCount: function () {
           return state.unread
+        },
+        lastChime: function () {
+          return state.lastChime
         },
         clear: clear,
         sound: function (kind) {
