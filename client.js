@@ -206,6 +206,25 @@ window.__ModuleLoader__.load({
       osc.stop(at + duration + 0.02)
     }
 
+    function schedule(ac, cfg, kind) {
+      var now = ac.currentTime + 0.02
+      var vol = cfg.volume * 0.4
+
+      if (kind === 'error') {
+        tone(ac, 392.0, now, 0.22, 'triangle', vol)
+        tone(ac, 311.13, now + 0.16, 0.3, 'triangle', vol)
+        return
+      }
+
+      if (cfg.soundPreset === 'beep') {
+        tone(ac, 1000, now, 0.14, 'square', vol * 0.6)
+        return
+      }
+
+      tone(ac, 880.0, now, 0.26, 'sine', vol)
+      tone(ac, 1174.66, now + 0.1, 0.34, 'sine', vol)
+    }
+
     function playSound(kind, override) {
       var cfg = override || state.cfg
       if (!cfg || !cfg.sound) return
@@ -223,22 +242,20 @@ window.__ModuleLoader__.load({
 
       var ac = ensureAudio()
       if (!ac) return
-      var now = ac.currentTime + 0.02
-      var vol = cfg.volume * 0.4
 
-      if (kind === 'error') {
-        tone(ac, 392.0, now, 0.22, 'triangle', vol)
-        tone(ac, 311.13, now + 0.16, 0.3, 'triangle', vol)
-        return
+      // A suspended context resumes asynchronously. Scheduling into it right
+      // away drops the notes, which is why the first click used to be silent.
+      if (ac.state === 'suspended' && typeof ac.resume === 'function') {
+        var resumed = ac.resume()
+        if (resumed && typeof resumed.then === 'function') {
+          resumed.then(function () {
+            schedule(ac, cfg, kind)
+          }).catch(function () {})
+          return
+        }
       }
 
-      if (cfg.soundPreset === 'beep') {
-        tone(ac, 1000, now, 0.14, 'square', vol * 0.6)
-        return
-      }
-
-      tone(ac, 880.0, now, 0.26, 'sine', vol)
-      tone(ac, 1174.66, now + 0.1, 0.34, 'sine', vol)
+      schedule(ac, cfg, kind)
     }
 
     /* ---------------------------------------------------------------- counter */
@@ -406,7 +423,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.5.0', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.5.1', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -668,7 +685,11 @@ window.__ModuleLoader__.load({
                 choice([
                   { value: 'chime', label: translate('presetChime') },
                   { value: 'beep', label: translate('presetBeep') },
-                ], preset, edit('soundPreset'), !writable),
+                ], preset, function (value) {
+                  edit('soundPreset')(value)
+                  // Picking a tone plays it; otherwise the click looks inert.
+                  playSound('done', { sound: true, soundPreset: value, volume: volume, soundUrl: '' })
+                }, !writable),
                 jsx('button', {
                   type: 'button',
                   disabled: !writable,
