@@ -119,6 +119,39 @@ test('turns shorter than minTurnDurationMs never reach the helper', { skip: proc
   }
 })
 
+test('subagent turns never raise the taskbar badge', { skip: process.platform !== 'win32' }, async (t) => {
+  let mod
+  try {
+    mod = await import(pathToFileURL(indexPath).href)
+  } catch (error) {
+    t.skip(`host half needs @deepseek-ai/schemastery: ${error.message}`)
+    return
+  }
+
+  const logPath = path.join(os.tmpdir(), `dsh-badge-subagent-${process.pid}.log`)
+  fs.rmSync(logPath, { force: true })
+
+  const ctx = createCtx()
+  const subagent = { session: { header: { origin: 'subagent' } } }
+
+  mod.apply(ctx, {
+    minTurnDurationMs: 0,
+    debugLog: logPath,
+    desktopBadgeClearOnFocus: false,
+  })
+
+  try {
+    ctx.emit('agent/status', { agent: subagent, status: 'running' })
+    ctx.emit('agent/status', { agent: subagent, status: 'idle' })
+
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+    assert.ok(!readLog(logPath).includes('state=shown'), 'a subagent turn must not paint a badge')
+  } finally {
+    ctx.dispose()
+    fs.rmSync(logPath, { force: true })
+  }
+})
+
 function readLog(logPath) {
   try {
     return fs.readFileSync(logPath, 'utf8')

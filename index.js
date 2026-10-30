@@ -94,6 +94,16 @@ function badgeColorOf(config) {
   return /^#[0-9a-f]{3,8}$/i.test(value) ? value : '#f5455c'
 }
 
+// The browser half skips rows whose origin is "subagent"; the host sees the
+// same fact on the agent's session header.
+function isSubagent(agent) {
+  try {
+    return Boolean(agent && agent.session && agent.session.header && agent.session.header.origin === 'subagent')
+  } catch {
+    return false
+  }
+}
+
 function startHelper(config) {
   const child = spawn(
     'powershell.exe',
@@ -196,6 +206,10 @@ function watchTurnsForTaskbar(ctx, config) {
   const minDuration = Number.isFinite(minDurationValue) ? minDurationValue : 3000
 
   ctx.on('agent/status', ({ agent, status }) => {
+    // A subagent's turn is internal work the user never sees as a session, and
+    // the browser half already skips those rows. Counting them here made the
+    // taskbar number run ahead of the tab number.
+    if (isSubagent(agent)) return
     if (status === 'running') {
       startedAt.set(agent, Date.now())
       return
@@ -207,7 +221,8 @@ function watchTurnsForTaskbar(ctx, config) {
     send('add')
   })
 
-  ctx.on('agent/error', () => {
+  ctx.on('agent/error', ({ agent } = {}) => {
+    if (isSubagent(agent)) return
     send('add')
   })
 
