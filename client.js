@@ -339,6 +339,9 @@ window.__ModuleLoader__.load({
     // loaded this plugin shows no trace of the page.
     var SETTINGS_NS = 'settings.badge'
     var NAMESPACES = ['badge', 'badge-notify']
+    // The bundle config slot is keyed by the installed package name; the browser
+    // half cannot read package.json, so the name is spelled here.
+    var BUNDLE_NAME = 'dsh-badge'
 
     var COPY = {
       zh: {
@@ -749,10 +752,12 @@ window.__ModuleLoader__.load({
             namespace = NAMESPACES[1]
           }
           var controller = new BadgeCardController(configForms.get(namespace))
-          var remove = slots.inject('plugins.item', function () {
+          // `plugins.item` is the official-plugin list; a community bundle gets
+          // its form from `plugins.bundle.config`, keyed by the package name.
+          var remove = slots.inject('plugins.bundle.config', function () {
             return slots.register({
-              name: 'plugins.item',
-              id: 'badge',
+              name: 'plugins.bundle.config',
+              key: BUNDLE_NAME,
               order: 45,
               label: function () {
                 return t('title')

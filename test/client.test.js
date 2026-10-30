@@ -351,8 +351,8 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
   assert.equal(stubs.calls.registrations.length, 1)
 
   const { registration, component } = stubs.calls.registrations[0]
-  assert.equal(registration.name, 'plugins.item')
-  assert.equal(registration.id, 'badge')
+  assert.equal(registration.name, 'plugins.bundle.config')
+  assert.equal(registration.key, 'dsh-badge')
   assert.equal(registration.label(), 'title')
 
   const face = registration.inject()

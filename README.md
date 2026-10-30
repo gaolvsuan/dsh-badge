@@ -97,7 +97,7 @@ dsh plugin --profile desktop add dsh-badge
 
 ## 设置页
 
-设置侧边栏的 **Plugins** 页里有一张「角标」卡：
+设置 → **插件管理** → 打开 `dsh-badge` 这个组合包，配置表单就在页面里：
 
 - **颜色**：六个预设色块，外加一个取色器，改完保存按钮也跟着变色
 - **位置**：右下角 / 右上角二选一
@@ -107,7 +107,9 @@ dsh plugin --profile desktop add dsh-badge
 
 改完点保存写入 Host 设置文档，取消则丢弃草稿。
 
-实现上，卡注册进 `plugins.item` 槽，只在 Host 提供对应设置命名空间时才出现，所以没装这个插件的部署看不到它。控件是自己画的：DSH 共享的 `SettingsValueField` 只渲染文本框，没有开关、下拉和取色器，所以这里保留 `SettingsFormModel` 负责暂存与提交，界面用原生控件自己拼。布尔类配置仍走配置文件。
+实现上，表单注册进 `plugins.bundle.config` 槽，键是包名 `dsh-badge`。社区组合包不能用 `plugins.item`，那个槽只列官方插件。表单只在 Host 提供对应设置命名空间时才注册，所以没装这个插件的部署看不到它。
+
+控件是自己画的：DSH 共享的 `SettingsValueField` 只渲染文本框，没有开关、下拉和取色器，所以这里保留 `SettingsFormModel` 负责暂存与提交，界面用原生控件自己拼。布尔类配置仍走配置文件。
 
 ## 手动验证
 
