@@ -33,6 +33,14 @@
 
 在市场里搜索 `dsh-badge` 后安装，安装完成后按市场提示重启或等待热挂载。
 
+### 从 npm 安装
+
+```bash
+dsh plugin --profile desktop add dsh-badge
+```
+
+`dsh plugin add` 只跑 pnpm，不会改 `dsh.profile.bundles`，装完还要在 profile 的 `package.json` 里把 `dsh-badge` 加进那个数组，否则插件不会加载。
+
 ### 手工安装（本地开发）
 
 把本仓库放到任意目录，然后在 profile 的 `package.json` 里加两处：
