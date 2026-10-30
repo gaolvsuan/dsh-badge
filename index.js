@@ -1,13 +1,22 @@
 import { appendFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
 
 export const name = 'dsh-badge-notify'
 
 /**
- * The badge and the chime live in the browser: the tab icon, the document
- * title and the audio output all belong to the page that renders the session
- * list. The host half therefore only carries the config schema and keeps the
- * plugin loadable, so a profile can list it as a bundle.
+ * Two halves, two different windows onto the same event.
+ *
+ * The browser half draws the tab icon and plays the chime, because the favicon
+ * and the audio device belong to the page.
+ *
+ * The desktop half draws the taskbar overlay. Electron's setOverlayIcon is out
+ * of reach here: the host runs in its own process and the window with the
+ * taskbar button belongs to another one. Windows still lets any process paint
+ * that overlay through ITaskbarList3 given the HWND, so this half spawns
+ * taskbar.ps1, feeds it turn events, and lets it own the count and the
+ * foreground rule.
  *
  * Every default here is mirrored in client.js. The client reads the raw patch
  * config and applies its own fallbacks, because a client bundle can load
@@ -34,13 +43,139 @@ export const Config = Schema.object({
     .description('Reset the unread count when the tab regains focus.'),
   errorSound: Schema.boolean().default(false)
     .description('Play a lower two-tone alert when a turn fails.'),
+  desktopBadge: Schema.boolean().default(true)
+    .description('Windows only: paint the count on the app taskbar button through taskbar.ps1.'),
+  desktopBadgeWindow: Schema.string().default('DeepSeek Harness')
+    .description('Process name whose window carries the taskbar button.'),
+  desktopBadgeClearOnFocus: Schema.boolean().default(true)
+    .description('Clear the taskbar badge when that window comes to the foreground.'),
   debugLog: Schema.string().default('')
     .description('Optional file path. When set, the host appends one line every time this plugin loads, which is how you tell a missing badge apart from a plugin that never mounted.'),
 })
 
+/* ------------------------------------------------------------------ taskbar */
+
+let helper = null
+let helperConfig = null
+
+function helperScript() {
+  return fileURLToPath(new URL('./taskbar.ps1', import.meta.url))
+}
+
+function startHelper(config) {
+  const child = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', helperScript(),
+      '-WindowMatch', config.desktopBadgeWindow || 'DeepSeek Harness',
+    ],
+    { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true },
+  )
+
+  // Drain stdout: an unread pipe would eventually block the helper. With a
+  // debug log configured, keep the state lines — they are the only evidence
+  // that the overlay was actually painted.
+  child.stdout.on('data', (chunk) => {
+    if (!config.debugLog) return
+    try {
+      appendFileSync(config.debugLog, String(chunk))
+    } catch {
+      // Diagnostics must not break the helper.
+    }
+  })
+  child.on('error', () => {
+    if (helper === child) helper = null
+  })
+  child.on('exit', () => {
+    if (helper === child) helper = null
+  })
+
+  helperConfig = config
+  return child
+}
+
+function send(command) {
+  if (!helperConfig) return
+  if (!helper || helper.exitCode !== null) {
+    try {
+      helper = startHelper(helperConfig)
+    } catch {
+      helper = null
+      return
+    }
+  }
+  try {
+    helper.stdin.write(command + '\n')
+  } catch {
+    helper = null
+  }
+}
+
+function stopHelper() {
+  const child = helper
+  helper = null
+  helperConfig = null
+  if (!child) return
+  try {
+    child.stdin.write('quit\n')
+  } catch {
+    // The helper may already be gone.
+  }
+  const timer = setTimeout(() => {
+    try {
+      child.kill()
+    } catch {
+      // Nothing left to kill.
+    }
+  }, 1500)
+  if (typeof timer.unref === 'function') timer.unref()
+}
+
+function watchTurnsForTaskbar(ctx, config) {
+  // The helper is spawned lazily on the first turn event, so the config has to
+  // be visible to send() before that happens.
+  helperConfig = config
+
+  const startedAt = new Map()
+  const minDuration = typeof config.minTurnDurationMs === 'number' ? config.minTurnDurationMs : 3000
+
+  ctx.on('agent/status', ({ agent, status }) => {
+    if (status === 'running') {
+      startedAt.set(agent, Date.now())
+      return
+    }
+    const started = startedAt.get(agent)
+    startedAt.delete(agent)
+    if (started == null) return
+    if (Date.now() - started < minDuration) return
+    send('add')
+  })
+
+  ctx.on('agent/error', () => {
+    send('add')
+  })
+
+  ctx.on('agent/disposed', ({ agent }) => {
+    startedAt.delete(agent)
+  })
+
+  if (config.desktopBadgeClearOnFocus !== false) {
+    const tick = setInterval(() => send('tick'), 800)
+    if (typeof tick.unref === 'function') tick.unref()
+    ctx.effect(() => () => clearInterval(tick))
+  }
+
+  ctx.effect(() => () => stopHelper())
+}
+
+/* -------------------------------------------------------------------- apply */
+
 export function apply(ctx, config) {
-  // Nothing to wire on the host side. Log once at debug level so a plugin
-  // inventory page can show that the config reached this half.
+  // Log once at debug level so a plugin inventory page can show that the
+  // config reached this half.
   try {
     ctx?.logger?.debug?.('dsh-badge-notify: loaded with %o', config)
   } catch {
@@ -56,5 +191,18 @@ export function apply(ctx, config) {
     }
   } catch {
     // A diagnostic must never take the plugin down either.
+  }
+
+  if (process.platform !== 'win32') return
+  if (config?.enabled === false || config?.desktopBadge === false) return
+
+  try {
+    watchTurnsForTaskbar(ctx, config || {})
+  } catch (error) {
+    try {
+      ctx?.logger?.warn?.('dsh-badge-notify: taskbar badge unavailable: %s', error?.message)
+    } catch {
+      // Nothing left to report to.
+    }
   }
 }

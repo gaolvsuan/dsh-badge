@@ -1,11 +1,12 @@
 # dsh-badge-notify
 
-DeepSeek Harness 插件：回合结束时在浏览器标签页图标上叠加未读数字角标，并播放提示音。
+DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数字角标，并播放提示音。
 
 ## 效果
 
 - 标签页图标右下角出现红色角标，显示未读回合数（超过 99 显示 `99+`）
 - 标题变成 `(3) DeepSeek Harness`
+- Windows 上任务栏按钮同样挂上红色数字角标，窗口切回前台后清除
 - 回合结束播放两音铃声，错误回合可另配低音提示
 - 标签页重新可见约 1.2 秒后自动清零
 
@@ -75,6 +76,9 @@ DeepSeek Harness 插件：回合结束时在浏览器标签页图标上叠加未
 | `minTurnDurationMs` | `3000` | 短于该时长的回合不计角标、不响 |
 | `clearOnFocus` | `true` | 标签页重新可见时清零 |
 | `errorSound` | `false` | 回合失败时播放低音提示 |
+| `desktopBadge` | `true` | Windows 专用：是否在任务栏按钮上画数字角标 |
+| `desktopBadgeWindow` | `DeepSeek Harness` | 承载任务栏按钮的进程名 |
+| `desktopBadgeClearOnFocus` | `true` | 窗口切回前台时清除任务栏角标 |
 | `debugLog` | `''` | 填一个文件路径，插件每次加载时向该文件追加一行，用来区分「没挂载」和「浏览器没画出来」 |
 
 ## 手动验证
@@ -96,6 +100,26 @@ chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
   --dump-dom "file:///…/demo/index.html?auto=1"
 ```
 
+## 桌面端任务栏角标
+
+Electron 的 `setOverlayIcon` 在这里用不了：插件跑在 DSH 的宿主进程里，带任务栏按钮的窗口属于另一个进程。Windows 允许任何进程通过 `ITaskbarList3` 给指定 HWND 画覆盖图标，所以宿主侧会拉起 `taskbar.ps1`，用管道喂它事件：
+
+```
+宿主 index.js ──stdin: add / tick / quit──▶ taskbar.ps1 ──ITaskbarList3──▶ 任务栏按钮
+```
+
+- 助手自己维护计数、画图标、判断前台窗口，`add` 加一，`tick` 检查窗口是否刚切回前台并清除
+- 图标用 `System.Drawing` 现画：32×32 红底白字，超过 99 显示 `99`
+- 宿主退出时管道关闭，助手随之退出并清掉角标，不留残留
+
+不想装进 profile 也能单独看效果：
+
+```bash
+npm run demo:taskbar
+```
+
+它会拉起助手，把计数推到 1、2、3，停两秒再清掉。
+
 ## 开发
 
 ```bash
@@ -109,7 +133,8 @@ npm test        # 单元测试（node --test，用 DOM 桩驱动真实 client.js
 
 ## 已知限制
 
-- 角标只作用于浏览器标签页图标（favicon）。DSH 桌面版的任务栏图标由 Electron 主进程绘制，插件改不到；桌面版能看到的是窗口标题的 `(N)` 前缀。
+- 任务栏角标只在 Windows 上可用，依赖一个常驻的 PowerShell 助手进程；macOS 和 Linux 上只剩标签页角标、标题前缀和音效。
+- 助手按进程名找窗口。DSH 换名字或同机跑多个实例时，需要用 `desktopBadgeWindow` 指定，或者关掉 `desktopBadge`。
 - 浏览器要求页面发生过一次点击或按键后才允许播放声音，插件在首次交互时解锁音频。
 - 计数是全局未读回合数，不按会话分别统计。
 

@@ -12,13 +12,15 @@
   "files": [
     "index.js",
     "client.js",
+    "taskbar.ps1",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "check": "node --check index.js && node --check client.js",
-    "test": "node --test"
+    "test": "node --test",
+    "demo:taskbar": "node tools/taskbar-demo.mjs"
   },
   "keywords": [
     "dsh",
