@@ -456,7 +456,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.7.0', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.7.1', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -639,13 +639,19 @@ window.__ModuleLoader__.load({
           return Object.prototype.hasOwnProperty.call(draft, name) ? draft[name] : text(name)
         }
 
-        // Changes take effect on the badge as they are made, and a short debounce
-        // writes them through, so there is no save button to remember.
+        // Changes take effect on the badge as they are made and are written
+        // straight through. Only the slider debounces, because a drag fires on
+        // every pixel and each write bumps the Host revision.
         var saveTimer = null
         var applyLive = function (patch) {
           if (!state.cfg) return
           state.cfg = Object.assign({}, state.cfg, patch)
           if (state.unread > 0) paint()
+        }
+        var flush = function () {
+          try {
+            props.save()
+          } catch (error) {}
         }
         var edit = function (name) {
           return function (value) {
@@ -660,12 +666,12 @@ window.__ModuleLoader__.load({
             else if (name === 'minTurnDurationMs') patch.minTurnDurationMs = Number(value) || 0
             else patch[name] = value
             applyLive(patch)
-            if (saveTimer) clearTimeout(saveTimer)
-            saveTimer = setTimeout(function () {
-              try {
-                props.save()
-              } catch (error) {}
-            }, 450)
+            if (name === 'volume') {
+              if (saveTimer) clearTimeout(saveTimer)
+              saveTimer = setTimeout(flush, 450)
+              return
+            }
+            flush()
           }
         }
         var heading = function (name, key) {
