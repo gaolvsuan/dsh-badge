@@ -404,12 +404,22 @@ window.__ModuleLoader__.load({
 
     var FIELDS = ['badgeColor', 'badgePosition', 'soundPreset', 'volume', 'minTurnDurationMs']
 
+    // Why the settings form is or is not on screen. Read it from the devtools
+    // console with `__DSH_BADGE__.diag` when the page shows nothing.
+    var DIAG = { build: '0.4.1', reason: '', served: null, registered: false }
+
     function setupSettingsCard(ctx) {
       var configForms = ctx && typeof ctx.get === 'function' ? ctx.get('configForms') : null
       var slots = ctx && typeof ctx.get === 'function' ? ctx.get('slots') : null
       var locale = ctx && typeof ctx.get === 'function' ? ctx.get('locale') : null
-      if (!configForms || !slots || !locale) return
-      if (typeof configForms.whileServed !== 'function') return
+      if (!configForms || !slots || !locale) {
+        DIAG.reason = 'missing service: ' + [!configForms && 'configForms', !slots && 'slots', !locale && 'locale'].filter(Boolean).join(',')
+        return
+      }
+      if (typeof configForms.whileServed !== 'function') {
+        DIAG.reason = 'configForms has no whileServed'
+        return
+      }
 
       var runtime
       var primitives
@@ -417,13 +427,17 @@ window.__ModuleLoader__.load({
         runtime = require('react/jsx-runtime')
         primitives = require('@deepseek-ai/dsh-client-ui-primitives')
       } catch (error) {
+        DIAG.reason = 'require failed: ' + (error && error.message)
         return
       }
 
       var jsx = runtime.jsx
       var jsxs = runtime.jsxs
       var SettingsFormModel = primitives.SettingsFormModel
-      if (!jsx || !jsxs || !SettingsFormModel) return
+      if (!jsx || !jsxs || !SettingsFormModel) {
+        DIAG.reason = 'primitives missing jsx runtime or SettingsFormModel'
+        return
+      }
 
       var t = locale.bind(SETTINGS_NS)
       ctx.effect(function () {
@@ -747,6 +761,11 @@ window.__ModuleLoader__.load({
 
       ctx.effect(function () {
         return configForms.whileServed(NAMESPACES, function (served) {
+          try {
+            DIAG.served = served && typeof served.forEach === 'function' ? Array.from(served) : String(served)
+          } catch (error) {
+            DIAG.served = 'unreadable'
+          }
           var namespace = NAMESPACES[0]
           if (served && typeof served.has === 'function' && !served.has(namespace)) {
             namespace = NAMESPACES[1]
@@ -755,6 +774,7 @@ window.__ModuleLoader__.load({
           // `plugins.item` is the official-plugin list; a community bundle gets
           // its form from `plugins.bundle.config`, keyed by the package name.
           var remove = slots.inject('plugins.bundle.config', function () {
+            DIAG.registered = true
             return slots.register({
               name: 'plugins.bundle.config',
               key: BUNDLE_NAME,
@@ -804,6 +824,7 @@ window.__ModuleLoader__.load({
       // and the same surface the demo page drives.
       window.__DSH_BADGE__ = {
         config: cfg,
+        diag: DIAG,
         test: function (count) {
           state.unread = typeof count === 'number' && count > 0 ? Math.floor(count) : 1
           paint()
