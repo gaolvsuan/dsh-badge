@@ -82,7 +82,7 @@ dsh plugin --profile desktop add dsh-badge
 | `badge` | `true` | 是否绘制图标角标 |
 | `titlePrefix` | `true` | 是否在标题前加 `(N) ` |
 | `sound` | `true` | 是否播放提示音 |
-| `soundPreset` | `chime` | `chime` 两音铃声，`beep` 单声方波 |
+| `soundPreset` | `chime` | `chime` 两音铃声，`beep` 单声方波，`rise` 三音上行 |
 | `soundUrl` | `''` | 自定义音频地址，设置后替代内置音 |
 | `volume` | `0.5` | 音量，0 到 1 |
 | `minTurnDurationMs` | `3000` | 短于该时长的回合不计角标、不响 |

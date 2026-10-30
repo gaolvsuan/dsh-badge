@@ -37,7 +37,7 @@ export const Config = Schema.object({
   sound: Schema.boolean().default(true)
     .description('Play a chime when a turn finishes.'),
   soundPreset: Schema.string().default('chime').volatile()
-    .description('Built-in tone: "chime" (two-note bell) or "beep" (single square blip).'),
+    .description('Built-in tone: "chime" (two-note bell), "beep" (single square blip) or "rise" (three ascending notes).'),
   soundUrl: Schema.string().default('')
     .description('Optional audio URL. When set, it replaces the built-in tone.'),
   volume: Schema.number().default(0.5).volatile()

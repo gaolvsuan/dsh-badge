@@ -221,6 +221,13 @@ window.__ModuleLoader__.load({
         return
       }
 
+      if (cfg.soundPreset === 'rise') {
+        tone(ac, 659.25, now, 0.2, 'triangle', vol)
+        tone(ac, 880.0, now + 0.09, 0.22, 'triangle', vol)
+        tone(ac, 1318.51, now + 0.18, 0.3, 'triangle', vol)
+        return
+      }
+
       tone(ac, 880.0, now, 0.26, 'sine', vol)
       tone(ac, 1174.66, now + 0.1, 0.34, 'sine', vol)
     }
@@ -378,7 +385,8 @@ window.__ModuleLoader__.load({
         positionTopRight: '右上角',
         presetChime: '两音铃声',
         presetBeep: '单声方波',
-        preview: '试听',
+        presetRise: '三音上行',
+        preview: '试听当前音色',
         discard: '取消修改',
         overridden: '已覆盖',
         reset: '恢复默认',
@@ -406,7 +414,8 @@ window.__ModuleLoader__.load({
         positionTopRight: 'Top right',
         presetChime: 'Two-note chime',
         presetBeep: 'Square blip',
-        preview: 'Preview',
+        presetRise: 'Three-note rise',
+        preview: 'Preview current tone',
         discard: 'Discard',
         overridden: 'Overridden',
         reset: 'Reset to default',
@@ -423,7 +432,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.5.1', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.5.2', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -685,6 +694,7 @@ window.__ModuleLoader__.load({
                 choice([
                   { value: 'chime', label: translate('presetChime') },
                   { value: 'beep', label: translate('presetBeep') },
+                  { value: 'rise', label: translate('presetRise') },
                 ], preset, function (value) {
                   edit('soundPreset')(value)
                   // Picking a tone plays it; otherwise the click looks inert.
