@@ -91,6 +91,14 @@ function startHelper(config) {
     { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true },
   )
 
+  try {
+    if (config.debugLog) {
+      appendFileSync(config.debugLog, `helper-spawn badgeColor=${badgeColorOf(config)} pid=${child.pid}\n`)
+    }
+  } catch {
+    // Diagnostics must not break the helper.
+  }
+
   // Drain stdout: an unread pipe would eventually block the helper. With a
   // debug log configured, keep the state lines — they are the only evidence
   // that the overlay was actually painted.
@@ -213,7 +221,10 @@ export function apply(ctx, config) {
   // the two apart.
   try {
     if (config?.debugLog) {
-      appendFileSync(config.debugLog, `loaded ${new Date().toISOString()} pid=${process.pid}\n`)
+      appendFileSync(
+        config.debugLog,
+        `loaded ${new Date().toISOString()} pid=${process.pid} badgeColor=${String(config.badgeColor)} keys=${Object.keys(config).join('|')}\n`,
+      )
     }
   } catch {
     // A diagnostic must never take the plugin down either.
