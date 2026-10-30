@@ -328,12 +328,18 @@ function createSettingsStubs() {
 
 function makeSettingsCtx(sessions, stubs) {
   const base = makeCtx(sessions)
-  return {
+  const child = {
     ...base,
-    // Declared in `inject`, so the services arrive as context properties.
     configForms: stubs.configForms,
     slots: stubs.slots,
     locale: stubs.locale,
+  }
+  return {
+    ...base,
+    // Dynamic inject: the callback receives a context that carries the service.
+    inject(names, callback) {
+      if (names.includes('configForms')) callback(child)
+    },
     get(name) {
       if (name === 'sessions') return sessions
       return null
@@ -348,13 +354,12 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
 
   mod.apply(makeSettingsCtx(sessions, stubs), { minTurnDurationMs: 0 })
 
-  assert.deepEqual(stubs.calls.namespaces, ['badge', 'badge-notify'])
+  assert.deepEqual(stubs.calls.namespaces, ['badge', 'dsh-badge', 'badge-notify'])
   assert.equal(stubs.calls.registrations.length, 1)
 
   const { registration, component } = stubs.calls.registrations[0]
   assert.equal(registration.name, 'plugins.bundle.config')
   assert.equal(registration.key, 'dsh-badge')
-  assert.equal(registration.label(), 'title')
 
   const face = registration.inject()
   assert.ok(face.hooks && face.hooks.badgeCard, 'card face must carry the hook store')

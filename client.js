@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var exports = module.exports
 
-    var inject = ['sessions', 'slots', 'locale', 'configForms']
+    var inject = ['sessions', 'slots', 'locale']
 
     var ICON_SIZE = 64
     var BADGE_COLOR = '#f5455c'
@@ -338,7 +338,7 @@ window.__ModuleLoader__.load({
     // Host serves the matching settings namespace, so a deployment that never
     // loaded this plugin shows no trace of the page.
     var SETTINGS_NS = 'settings.badge'
-    var NAMESPACES = ['badge', 'badge-notify']
+    var NAMESPACES = ['badge', 'dsh-badge', 'badge-notify']
     // The bundle config slot is keyed by the installed package name; the browser
     // half cannot read package.json, so the name is spelled here.
     var BUNDLE_NAME = 'dsh-badge'
@@ -406,14 +406,29 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.4.3', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.4.4', reason: '', served: null, registered: false }
 
+    // `configForms` is not reachable as a property or through ctx.get; the
+    // documented way is a dynamic inject, which hands back a child context
+    // that carries it. Same shape dsh-context uses.
     function setupSettingsCard(ctx) {
-      // Declared in `inject`, so cordis hands these to apply as context
-      // properties. `ctx.get(name)` does not reach them on the web client.
-      var configForms = (ctx && ctx.configForms) || null
-      var slots = (ctx && ctx.slots) || null
-      var locale = (ctx && ctx.locale) || null
+      if (!ctx || typeof ctx.inject !== 'function') {
+        DIAG.reason = 'ctx.inject missing'
+        return
+      }
+      ctx.inject(['configForms'], function (child) {
+        try {
+          mountSettingsCard(child)
+        } catch (error) {
+          DIAG.reason = 'mount failed: ' + (error && error.message)
+        }
+      })
+    }
+
+    function mountSettingsCard(ctx) {
+      var configForms = ctx.configForms
+      var slots = ctx.slots
+      var locale = ctx.locale
       if (!configForms || !slots || !locale) {
         DIAG.reason = 'missing service: ' + [!configForms && 'configForms', !slots && 'slots', !locale && 'locale'].filter(Boolean).join(',')
         return
@@ -769,8 +784,13 @@ window.__ModuleLoader__.load({
             DIAG.served = 'unreadable'
           }
           var namespace = NAMESPACES[0]
-          if (served && typeof served.has === 'function' && !served.has(namespace)) {
-            namespace = NAMESPACES[1]
+          if (served && typeof served.has === 'function') {
+            for (var i = 0; i < NAMESPACES.length; i += 1) {
+              if (served.has(NAMESPACES[i])) {
+                namespace = NAMESPACES[i]
+                break
+              }
+            }
           }
           var controller = new BadgeCardController(configForms.get(namespace))
           // `plugins.item` is the official-plugin list; a community bundle gets
@@ -780,10 +800,6 @@ window.__ModuleLoader__.load({
             return slots.register({
               name: 'plugins.bundle.config',
               key: BUNDLE_NAME,
-              order: 45,
-              label: function () {
-                return t('title')
-              },
               locale: SETTINGS_NS,
               inject: function () {
                 return controller.inject()
