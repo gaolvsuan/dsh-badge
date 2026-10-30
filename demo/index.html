@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dsh-badge-notify 演示</title>
+  <!-- 一个自带图标的 base icon，用来验证「在站点原图标上盖角标」这条路径 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234d6bfe'/%3E%3Ctext x='32' y='43' font-family='system-ui' font-size='30' font-weight='700' fill='%23fff' text-anchor='middle'%3EDS%3C/text%3E%3C/svg%3E">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; padding: 48px 24px;
+      background: #0f1117; color: #e7e9ee;
+      font: 15px/1.6 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: .2px; }
+    .sub { color: #8b90a0; margin: 0 0 28px; font-size: 13px; }
+    .card {
+      background: #171a23; border: 1px solid #232838; border-radius: 14px;
+      padding: 20px; margin-bottom: 16px;
+    }
+    .card h2 { margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #8b90a0; letter-spacing: .08em; text-transform: uppercase; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; }
+    button {
+      appearance: none; border: 1px solid #2d3446; background: #1f2432; color: #e7e9ee;
+      padding: 9px 14px; border-radius: 9px; font: inherit; font-size: 14px; cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    button:hover { background: #262c3d; border-color: #3a435a; }
+    button.primary { background: #4d6bfe; border-color: #4d6bfe; color: #fff; }
+    button.primary:hover { background: #5b78ff; }
+    dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 0; font-size: 14px; }
+    dt { color: #8b90a0; }
+    dd { margin: 0; font-variant-numeric: tabular-nums; }
+    code { background: #10131b; border: 1px solid #232838; border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+    .hint { color: #8b90a0; font-size: 13px; margin: 14px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>dsh-badge-notify 演示</h1>
+    <p class="sub">这个页面加载的是仓库里真实的 <code>client.js</code>，只把 DSH 的 sessions 服务换成了假数据。看浏览器标签页图标和标题。</p>
+
+    <div class="card">
+      <h2>模拟一个回合</h2>
+      <div class="row">
+        <button class="primary" id="start">开始回合</button>
+        <button class="primary" id="finish">结束回合（+1 并响）</button>
+      </div>
+      <p class="hint">真实环境下这两步由 DSH 自己驱动：会话开始运行 / 运行结束。</p>
+    </div>
+
+    <div class="card">
+      <h2>手动测试</h2>
+      <div class="row">
+        <button id="sound">只响一声</button>
+        <button id="plus">角标 +1</button>
+        <button id="reset">清零</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>当前状态</h2>
+      <dl>
+        <dt>未读计数</dt><dd id="count">0</dd>
+        <dt>document.title</dt><dd id="title">—</dd>
+        <dt>favicon</dt><dd id="icon">站点原图标</dd>
+        <dt>音频上下文</dt><dd id="audio">未创建</dd>
+      </dl>
+    </div>
+  </div>
+
+  <script>
+    // 1. 用一个假的 ModuleLoader 接住 client.js，让它以为自己在 DSH 里。
+    window.__ModuleLoader__ = { load: function (mod) { window.__dshModule = mod } }
+  </script>
+  <script src="../client.js"></script>
+  <script>
+    // 2. 假的 sessions 服务：形状与 dsh-client-runtime 暴露的一致。
+    function createFakeSessions() {
+      var rows = {
+        'demo-session': {
+          id: 'demo-session',
+          title: '演示会话',
+          running: false,
+          pendingInteraction: undefined,
+          origin: 'user',
+        },
+      }
+      var ids = ['demo-session']
+      var subscribers = []
+
+      function notify() {
+        subscribers.slice().forEach(function (fn) { fn() })
+      }
+
+      return {
+        list: {
+          getSnapshot: function () { return { ids: ids.slice(), byId: rows } },
+          subscribe: function (fn) {
+            subscribers.push(fn)
+            return function () {
+              subscribers = subscribers.filter(function (item) { return item !== fn })
+            }
+          },
+        },
+        set: function (patch) {
+          Object.keys(patch).forEach(function (key) { rows['demo-session'][key] = patch[key] })
+          notify()
+        },
+      }
+    }
+
+    var sessions = createFakeSessions()
+    var ctx = {
+      get: function (name) { return name === 'sessions' ? sessions : null },
+      effect: function (fn) { return fn() },
+    }
+
+    var mod = window.__dshModule.factory(function () { throw new Error('演示页不提供 require') })
+    mod.apply(ctx, { minTurnDurationMs: 0, volume: 0.6 })
+
+    // 3. 把内部状态渲染到页面上，方便肉眼确认。
+    var el = {
+      count: document.getElementById('count'),
+      title: document.getElementById('title'),
+      icon: document.getElementById('icon'),
+      audio: document.getElementById('audio'),
+    }
+
+    function refresh() {
+      var api = window.__DSH_BADGE_NOTIFY__
+      el.count.textContent = api ? String(api.getCount()) : '—'
+      el.title.textContent = document.title
+      var href = (document.querySelector('link[rel~="icon"]') || {}).href || ''
+      el.icon.textContent = href.indexOf('data:image/png') === 0 ? '已覆盖为带角标的 PNG' : '站点原图标'
+      el.audio.textContent = (api && window.AudioContext) ? '可用' : '不可用'
+    }
+    setInterval(refresh, 250)
+
+    document.getElementById('start').addEventListener('click', function () {
+      sessions.set({ running: true })
+    })
+    document.getElementById('finish').addEventListener('click', function () {
+      sessions.set({ running: false })
+    })
+    document.getElementById('sound').addEventListener('click', function () {
+      window.__DSH_BADGE_NOTIFY__.sound('done')
+    })
+    document.getElementById('plus').addEventListener('click', function () {
+      window.__DSH_BADGE_NOTIFY__.test()
+    })
+    document.getElementById('reset').addEventListener('click', function () {
+      window.__DSH_BADGE_NOTIFY__.clear()
+    })
+  </script>
+</body>
+</html>
