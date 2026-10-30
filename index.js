@@ -230,6 +230,24 @@ function watchTurnsForTaskbar(ctx, config) {
     startedAt.delete(agent)
   })
 
+  // The colour is read again on every beat instead of once at apply: a volatile
+  // field's reference reports the accepted value live, so a settings change
+  // reaches a running helper without the plugin being reloaded.
+  let lastColor = badgeColorOf(config)
+  const colourWatch = setInterval(() => {
+    const current = badgeColorOf(helperConfig)
+    if (current === lastColor) return
+    lastColor = current
+    if (!helper) return
+    try {
+      helper.stdin.write('color ' + current + '\n')
+    } catch {
+      helper = null
+    }
+  }, 800)
+  if (typeof colourWatch.unref === 'function') colourWatch.unref()
+  ctx.effect(() => () => clearInterval(colourWatch))
+
   if (config.desktopBadgeClearOnFocus !== false) {
     const tick = setInterval(() => send('tick'), 800)
     if (typeof tick.unref === 'function') tick.unref()

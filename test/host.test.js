@@ -152,6 +152,48 @@ test('subagent turns never raise the taskbar badge', { skip: process.platform !=
   }
 })
 
+test('a colour change reaches a running helper without a reload', { skip: process.platform !== 'win32' }, async (t) => {
+  let mod
+  try {
+    mod = await import(pathToFileURL(indexPath).href)
+  } catch (error) {
+    t.skip(`host half needs @deepseek-ai/schemastery: ${error.message}`)
+    return
+  }
+
+  const logPath = path.join(os.tmpdir(), `dsh-badge-recolour-${process.pid}.log`)
+  fs.rmSync(logPath, { force: true })
+
+  const ctx = createCtx()
+  const agent = {}
+  let colour = '#3b82f6'
+
+  mod.apply(ctx, {
+    minTurnDurationMs: 0,
+    debugLog: logPath,
+    desktopBadgeClearOnFocus: false,
+    badgeColor: { get: () => colour },
+  })
+
+  try {
+    ctx.emit('agent/status', { agent, status: 'running' })
+    ctx.emit('agent/status', { agent, status: 'idle' })
+
+    const painted = await waitFor(() => readLog(logPath).includes('state=shown count=1'), 20_000)
+    assert.ok(painted, `helper never painted; log:\n${readLog(logPath)}`)
+
+    colour = '#10b981'
+    const repainted = await waitFor(
+      () => (readLog(logPath).match(/state=shown count=1/g) || []).length >= 2,
+      8_000,
+    )
+    assert.ok(repainted, `helper never repainted after the colour changed; log:\n${readLog(logPath)}`)
+  } finally {
+    ctx.dispose()
+    fs.rmSync(logPath, { force: true })
+  }
+})
+
 function readLog(logPath) {
   try {
     return fs.readFileSync(logPath, 'utf8')
