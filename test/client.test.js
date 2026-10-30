@@ -370,18 +370,8 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
     edit() {},
     resetField() {},
   })
-  assert.equal(rendered.type, 'SettingsForm')
-  assert.equal(rendered.props.children.length, 5)
-  assert.deepEqual(
-    rendered.props.children.map((child) => child.props.id),
-    [
-      'plugin-config-badge-badgeColor',
-      'plugin-config-badge-badgePosition',
-      'plugin-config-badge-soundPreset',
-      'plugin-config-badge-volume',
-      'plugin-config-badge-minTurnDurationMs',
-    ],
-  )
+  assert.equal(rendered.type, 'div')
+  assert.equal(rendered.props.children.length, 6, 'colour, corner, sound, volume, duration, footer')
 })
 
 test('a missing configForms service never breaks the badge', async () => {

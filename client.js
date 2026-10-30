@@ -206,8 +206,8 @@ window.__ModuleLoader__.load({
       osc.stop(at + duration + 0.02)
     }
 
-    function playSound(kind) {
-      var cfg = state.cfg
+    function playSound(kind, override) {
+      var cfg = override || state.cfg
       if (!cfg || !cfg.sound) return
       if (kind === 'error' && !cfg.errorSound) return
 
@@ -354,6 +354,12 @@ window.__ModuleLoader__.load({
         volumeHint: '0 到 1 之间的小数。',
         minTurnDurationMsLabel: '最短回合时长（毫秒）',
         minTurnDurationHint: '短于该时长的回合不计角标、不响。',
+        positionBottomRight: '右下角',
+        positionTopRight: '右上角',
+        presetChime: '两音铃声',
+        presetBeep: '单声方波',
+        preview: '试听',
+        discard: '取消修改',
         overridden: '已覆盖',
         reset: '恢复默认',
         invalid: '这个值不合法，改好再保存。',
@@ -376,6 +382,12 @@ window.__ModuleLoader__.load({
         volumeHint: 'A decimal between 0 and 1.',
         minTurnDurationMsLabel: 'Minimum turn length (ms)',
         minTurnDurationHint: 'Shorter turns stay quiet and raise no badge.',
+        positionBottomRight: 'Bottom right',
+        positionTopRight: 'Top right',
+        presetChime: 'Two-note chime',
+        presetBeep: 'Square blip',
+        preview: 'Preview',
+        discard: 'Discard',
         overridden: 'Overridden',
         reset: 'Reset to default',
         invalid: 'That value is not valid; fix it before saving.',
@@ -407,25 +419,13 @@ window.__ModuleLoader__.load({
 
       var jsx = runtime.jsx
       var jsxs = runtime.jsxs
-      var SettingsForm = primitives.SettingsForm
-      var SettingsValueField = primitives.SettingsValueField
       var SettingsFormModel = primitives.SettingsFormModel
-      if (!jsx || !SettingsForm || !SettingsValueField || !SettingsFormModel) return
+      if (!jsx || !jsxs || !SettingsFormModel) return
 
       var t = locale.bind(SETTINGS_NS)
       ctx.effect(function () {
         return locale.register(SETTINGS_NS, COPY)
       }, 'dsh-badge: settings copy')
-
-      function formLabels() {
-        return {
-          unavailable: t('unavailable'),
-          readOnly: t('readOnly'),
-          saveFailed: t('saveFailed'),
-          save: t('save'),
-          saving: t('saving'),
-        }
-      }
 
       function BadgeCardController(scope) {
         var self = this
@@ -454,42 +454,291 @@ window.__ModuleLoader__.load({
         this.form.dispose()
       }
 
+      // Colours the badge can take with one click; the picker covers the rest.
+      var PRESET_COLORS = ['#f5455c', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#111827']
+
+      var LABEL = { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }
+      var HINT = { margin: '6px 0 0', fontSize: 12, opacity: 0.6 }
+      var ROW = { marginBottom: 18 }
+      var SWATCH = {
+        width: 26,
+        height: 26,
+        padding: 0,
+        borderRadius: '50%',
+        border: '2px solid transparent',
+        cursor: 'pointer',
+      }
+
+      function tag(text) {
+        return jsx('span', {
+          style: {
+            marginLeft: 8,
+            padding: '1px 6px',
+            borderRadius: 5,
+            fontSize: 11,
+            fontWeight: 500,
+            background: 'rgba(128,128,128,0.18)',
+          },
+        }, text)
+      }
+
+      function choice(options, current, onPick, disabled) {
+        return jsx('div', {
+          style: { display: 'flex', gap: 8, flexWrap: 'wrap' },
+          children: options.map(function (option) {
+            var active = option.value === current
+            return jsx('button', {
+              type: 'button',
+              disabled: disabled,
+              onClick: function () {
+                onPick(option.value)
+              },
+              style: {
+                padding: '6px 14px',
+                borderRadius: 8,
+                font: 'inherit',
+                fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                color: 'inherit',
+                cursor: disabled ? 'default' : 'pointer',
+                border: '1px solid ' + (active ? 'currentColor' : 'rgba(128,128,128,0.35)'),
+                background: active ? 'rgba(128,128,128,0.16)' : 'transparent',
+              },
+            }, option.label)
+          }),
+        })
+      }
+
       function BadgeCard(props) {
         var translate = props.t || t
-        var state = props.useBadgeCard(function (snapshot) {
-          return snapshot
+        var snapshot = props.useBadgeCard(function (state) {
+          return state
         })
         if (props.view === 'summary') return translate('description')
 
-        var children = FIELDS.map(function (name) {
-          var field = {
-            key: name,
-            id: 'plugin-config-badge-' + name,
-            label: translate(name + 'Label'),
-            hint: translate(name + 'Hint'),
-            overriddenLabel: translate('overridden'),
-            resetLabel: translate('reset'),
-            invalidLabel: translate('invalid'),
-            numeric: name === 'volume' || name === 'minTurnDurationMs',
-            disabled: !state.writable,
-            onEdit: function (text) {
-              props.edit(name, text)
-            },
-            onReset: function () {
-              props.resetField(name)
-            },
+        var writable = snapshot.writable !== false
+        var text = function (name) {
+          var field = snapshot[name]
+          return field && typeof field.text === 'string' ? field.text : ''
+        }
+        var edit = function (name) {
+          return function (value) {
+            props.edit(name, String(value))
           }
-          var snapshot = state[name]
-          for (var key in snapshot) field[key] = snapshot[key]
-          return jsx(SettingsValueField, field)
+        }
+        var heading = function (name, key) {
+          var field = snapshot[name]
+          return jsxs('label', {
+            style: LABEL,
+            children: [
+              translate(key + 'Label'),
+              field && field.overridden ? tag(translate('overridden')) : null,
+            ],
+          })
+        }
+
+        var color = text('badgeColor') || '#f5455c'
+        var position = text('badgePosition') || 'br'
+        var preset = text('soundPreset') || 'chime'
+        var volume = Number(text('volume'))
+        if (!isFinite(volume)) volume = 0.5
+        var duration = text('minTurnDurationMs') || '3000'
+
+        var colorRow = jsxs('div', {
+          style: ROW,
+          children: [
+            heading('badgeColor', 'badgeColor'),
+            jsxs('div', {
+              style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+              children: PRESET_COLORS.map(function (value) {
+                var active = value.toLowerCase() === color.toLowerCase()
+                return jsx('button', {
+                  type: 'button',
+                  disabled: !writable,
+                  title: value,
+                  onClick: function () {
+                    edit('badgeColor')(value)
+                  },
+                  style: {
+                    width: SWATCH.width,
+                    height: SWATCH.height,
+                    padding: 0,
+                    borderRadius: '50%',
+                    background: value,
+                    cursor: writable ? 'pointer' : 'default',
+                    border: active ? '2px solid currentColor' : '2px solid rgba(128,128,128,0.25)',
+                  },
+                }, value)
+              }).concat([
+                jsx('input', {
+                  type: 'color',
+                  disabled: !writable,
+                  value: color,
+                  onChange: function (event) {
+                    edit('badgeColor')(event.target.value)
+                  },
+                  style: {
+                    width: 44,
+                    height: 30,
+                    padding: 0,
+                    borderRadius: 6,
+                    cursor: writable ? 'pointer' : 'default',
+                    border: '1px solid rgba(128,128,128,0.35)',
+                    background: 'transparent',
+                  },
+                }),
+              ]),
+            }),
+            jsx('p', { style: HINT }, translate('badgeColorHint')),
+          ],
         })
 
-        return jsxs(SettingsForm, {
-          labels: formLabels(),
-          state: state,
-          onSave: props.save,
-          onDiscard: props.discard,
-          children: children,
+        var positionRow = jsxs('div', {
+          style: ROW,
+          children: [
+            heading('badgePosition', 'badgePosition'),
+            choice([
+              { value: 'br', label: translate('positionBottomRight') },
+              { value: 'tr', label: translate('positionTopRight') },
+            ], position, edit('badgePosition'), !writable),
+            jsx('p', { style: HINT }, translate('badgePositionHint')),
+          ],
+        })
+
+        var soundRow = jsxs('div', {
+          style: ROW,
+          children: [
+            heading('soundPreset', 'soundPreset'),
+            jsxs('div', {
+              style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+              children: [
+                choice([
+                  { value: 'chime', label: translate('presetChime') },
+                  { value: 'beep', label: translate('presetBeep') },
+                ], preset, edit('soundPreset'), !writable),
+                jsx('button', {
+                  type: 'button',
+                  disabled: !writable,
+                  onClick: function () {
+                    playSound('done', { sound: true, soundPreset: preset, volume: volume, soundUrl: '' })
+                  },
+                  style: {
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    font: 'inherit',
+                    fontSize: 13,
+                    color: 'inherit',
+                    cursor: writable ? 'pointer' : 'default',
+                    border: '1px dashed rgba(128,128,128,0.45)',
+                    background: 'transparent',
+                  },
+                }, translate('preview')),
+              ],
+            }),
+            jsx('p', { style: HINT }, translate('soundPresetHint')),
+          ],
+        })
+
+        var volumeRow = jsxs('div', {
+          style: ROW,
+          children: [
+            heading('volume', 'volume'),
+            jsxs('div', {
+              style: { display: 'flex', alignItems: 'center', gap: 12 },
+              children: [
+                jsx('input', {
+                  type: 'range',
+                  min: 0,
+                  max: 1,
+                  step: 0.05,
+                  disabled: !writable,
+                  value: volume,
+                  onChange: function (event) {
+                    edit('volume')(event.target.value)
+                  },
+                  style: { flex: 1, maxWidth: 280, accentColor: color },
+                }),
+                jsx('span', {
+                  style: { fontSize: 13, minWidth: 40, fontVariantNumeric: 'tabular-nums' },
+                }, Math.round(volume * 100) + '%'),
+              ],
+            }),
+            jsx('p', { style: HINT }, translate('volumeHint')),
+          ],
+        })
+
+        var durationRow = jsxs('div', {
+          style: ROW,
+          children: [
+            heading('minTurnDurationMs', 'minTurnDuration'),
+            jsx('input', {
+              type: 'number',
+              min: 0,
+              step: 500,
+              disabled: !writable,
+              value: duration,
+              onChange: function (event) {
+                edit('minTurnDurationMs')(event.target.value)
+              },
+              style: {
+                width: 140,
+                padding: '6px 10px',
+                borderRadius: 8,
+                font: 'inherit',
+                fontSize: 13,
+                color: 'inherit',
+                background: 'transparent',
+                border: '1px solid rgba(128,128,128,0.35)',
+              },
+            }),
+            jsx('p', { style: HINT }, translate('minTurnDurationHint')),
+          ],
+        })
+
+        var footer = jsxs('div', {
+          style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 22 },
+          children: [
+            jsx('button', {
+              type: 'button',
+              disabled: !writable || snapshot.saving === true,
+              onClick: function () {
+                props.save()
+              },
+              style: {
+                padding: '7px 18px',
+                borderRadius: 8,
+                font: 'inherit',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: writable ? 'pointer' : 'default',
+                color: '#fff',
+                background: color,
+                border: '1px solid ' + color,
+              },
+            }, snapshot.saving === true ? translate('saving') : translate('save')),
+            jsx('button', {
+              type: 'button',
+              disabled: !writable,
+              onClick: function () {
+                props.discard()
+              },
+              style: {
+                padding: '7px 14px',
+                borderRadius: 8,
+                font: 'inherit',
+                fontSize: 13,
+                color: 'inherit',
+                cursor: writable ? 'pointer' : 'default',
+                background: 'transparent',
+                border: '1px solid rgba(128,128,128,0.35)',
+              },
+            }, translate('discard')),
+            !writable ? jsx('span', { style: { fontSize: 12, opacity: 0.6 } }, translate('readOnly')) : null,
+          ],
+        })
+
+        return jsxs('div', {
+          children: [colorRow, positionRow, soundRow, volumeRow, durationRow, footer],
         })
       }
 
