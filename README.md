@@ -75,6 +75,7 @@ DeepSeek Harness 插件：回合结束时在浏览器标签页图标上叠加未
 | `minTurnDurationMs` | `3000` | 短于该时长的回合不计角标、不响 |
 | `clearOnFocus` | `true` | 标签页重新可见时清零 |
 | `errorSound` | `false` | 回合失败时播放低音提示 |
+| `debugLog` | `''` | 填一个文件路径，插件每次加载时向该文件追加一行，用来区分「没挂载」和「浏览器没画出来」 |
 
 ## 手动验证
 

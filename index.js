@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs'
 import Schema from '@deepseek-ai/schemastery'
 
 export const name = 'dsh-badge-notify'
@@ -33,6 +34,8 @@ export const Config = Schema.object({
     .description('Reset the unread count when the tab regains focus.'),
   errorSound: Schema.boolean().default(false)
     .description('Play a lower two-tone alert when a turn fails.'),
+  debugLog: Schema.string().default('')
+    .description('Optional file path. When set, the host appends one line every time this plugin loads, which is how you tell a missing badge apart from a plugin that never mounted.'),
 })
 
 export function apply(ctx, config) {
@@ -42,5 +45,16 @@ export function apply(ctx, config) {
     ctx?.logger?.debug?.('dsh-badge-notify: loaded with %o', config)
   } catch {
     // A logger must never take the plugin down.
+  }
+
+  // Load marker: an install that silently did not mount looks exactly like a
+  // browser that refused the favicon or the audio. One appended line tells
+  // the two apart.
+  try {
+    if (config?.debugLog) {
+      appendFileSync(config.debugLog, `loaded ${new Date().toISOString()} pid=${process.pid}\n`)
+    }
+  } catch {
+    // A diagnostic must never take the plugin down either.
   }
 }
