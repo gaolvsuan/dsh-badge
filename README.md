@@ -2,6 +2,10 @@
 
 和 ChatGPT 标签页右上角那个红色数字角标同一个东西，搬到 DeepSeek Harness：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数，并播放提示音。
 
+<p align="center">
+  <img src="docs/taskbar-badge.png" width="71" alt="Windows 任务栏图标右上角的红色数字角标">
+</p>
+
 ## 效果
 
 - 标签页图标右下角出现红色角标，显示未读回合数（超过 99 显示 `99+`）
