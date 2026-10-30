@@ -26,7 +26,7 @@ async function loadClient(options = {}) {
 
   const mod = env.window.__dshModule
   assert.ok(mod, 'client.js must call window.__ModuleLoader__.load')
-  return { env, mod: mod.factory(function () { throw new Error('no require') }) }
+  return { env, mod: mod.factory(options.require || function () { throw new Error('no require') }) }
 }
 
 function makeContext2d() {
@@ -251,4 +251,146 @@ test('enabled:false leaves the plugin inert', async () => {
 
   assert.equal(env.window.__DSH_BADGE__, undefined)
   assert.equal(env.document.title, 'DeepSeek Harness')
+})
+
+/* ------------------------------------------------------------------ settings */
+
+function createSettingsStubs() {
+  const calls = { specs: [], registrations: [], namespaces: [] }
+
+  class FakeForm {
+    constructor(scope, specs) {
+      this.scope = scope
+      calls.specs = specs
+    }
+    shell() {
+      return { writable: true }
+    }
+    field() {
+      return { text: '', overridden: false, invalid: false }
+    }
+    actions() {
+      return { save() {}, discard() {}, edit() {}, resetField() {} }
+    }
+    bind(projection) {
+      const useHook = function (selector) {
+        return selector(projection())
+      }
+      return useHook
+    }
+    dispose() {}
+  }
+
+  const primitives = {
+    SettingsForm: 'SettingsForm',
+    SettingsValueField: 'SettingsValueField',
+    SettingsFormModel: FakeForm,
+    settingsTextField: (name) => ({ kind: 'text', name }),
+    settingsNumberField: (name) => ({ kind: 'number', name }),
+  }
+
+  const runtime = {
+    jsx: (type, props) => ({ type, props }),
+    jsxs: (type, props) => ({ type, props }),
+  }
+
+  const require = (id) => {
+    if (id === 'react/jsx-runtime') return runtime
+    if (id === '@deepseek-ai/dsh-client-ui-primitives') return primitives
+    throw new Error('unexpected require: ' + id)
+  }
+
+  const locale = {
+    bind: () => (key) => key,
+    register: () => () => {},
+  }
+
+  const slots = {
+    inject: (name, fn) => fn(),
+    register: (registration, component) => {
+      calls.registrations.push({ registration, component })
+      return () => {}
+    },
+  }
+
+  const configForms = {
+    whileServed(namespaces, register) {
+      calls.namespaces = namespaces
+      return register(new Set(['badge']))
+    },
+    get(namespace) {
+      return { namespace }
+    },
+  }
+
+  return { calls, require, locale, slots, configForms }
+}
+
+function makeSettingsCtx(sessions, stubs) {
+  const base = makeCtx(sessions)
+  return {
+    ...base,
+    get(name) {
+      if (name === 'sessions') return sessions
+      if (name === 'configForms') return stubs.configForms
+      if (name === 'slots') return stubs.slots
+      if (name === 'locale') return stubs.locale
+      return null
+    },
+  }
+}
+
+test('registers a Plugins-page card when the Host serves the namespace', async () => {
+  const stubs = createSettingsStubs()
+  const { mod } = await loadClient({ require: stubs.require })
+  const sessions = createSessions()
+
+  mod.apply(makeSettingsCtx(sessions, stubs), { minTurnDurationMs: 0 })
+
+  assert.deepEqual(stubs.calls.namespaces, ['badge', 'badge-notify'])
+  assert.equal(stubs.calls.registrations.length, 1)
+
+  const { registration, component } = stubs.calls.registrations[0]
+  assert.equal(registration.name, 'plugins.item')
+  assert.equal(registration.id, 'badge')
+  assert.equal(registration.label(), 'title')
+
+  const face = registration.inject()
+  assert.ok(face.hooks && face.hooks.badgeCard, 'card face must carry the hook store')
+  assert.equal(typeof face.save, 'function')
+
+  assert.equal(component({ view: 'summary', t: (key) => key, useBadgeCard: face.hooks.badgeCard }), 'description')
+
+  const rendered = component({
+    view: 'form',
+    t: (key) => key,
+    useBadgeCard: face.hooks.badgeCard,
+    save() {},
+    discard() {},
+    edit() {},
+    resetField() {},
+  })
+  assert.equal(rendered.type, 'SettingsForm')
+  assert.equal(rendered.props.children.length, 5)
+  assert.deepEqual(
+    rendered.props.children.map((child) => child.props.id),
+    [
+      'plugin-config-badge-badgeColor',
+      'plugin-config-badge-badgePosition',
+      'plugin-config-badge-soundPreset',
+      'plugin-config-badge-volume',
+      'plugin-config-badge-minTurnDurationMs',
+    ],
+  )
+})
+
+test('a missing configForms service never breaks the badge', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+
+  mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
+  sessions.update('session-a', { running: true })
+  sessions.update('session-a', { running: false })
+
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 1)
 })

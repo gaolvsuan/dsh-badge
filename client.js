@@ -331,6 +331,201 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /* --------------------------------------------------------------- settings */
+
+    // The Plugins page in the settings sidebar hosts one card per configurable
+    // plugin. A card registers into `plugins.item` and only appears while the
+    // Host serves the matching settings namespace, so a deployment that never
+    // loaded this plugin shows no trace of the page.
+    var SETTINGS_NS = 'settings.badge'
+    var NAMESPACES = ['badge', 'badge-notify']
+
+    var COPY = {
+      zh: {
+        title: '角标',
+        description: '回合结束时的未读角标与提示音。',
+        badgeColorLabel: '角标颜色',
+        badgeColorHint: '十六进制颜色，例如 #f5455c。',
+        badgePositionLabel: '角标位置',
+        badgePositionHint: 'br 表示右下角，tr 表示右上角。',
+        soundPresetLabel: '提示音',
+        soundPresetHint: 'chime 是两音铃声，beep 是单声方波。',
+        volumeLabel: '音量',
+        volumeHint: '0 到 1 之间的小数。',
+        minTurnDurationMsLabel: '最短回合时长（毫秒）',
+        minTurnDurationHint: '短于该时长的回合不计角标、不响。',
+        overridden: '已覆盖',
+        reset: '恢复默认',
+        invalid: '这个值不合法，改好再保存。',
+        save: '保存',
+        saving: '保存中…',
+        saveFailed: '部署没有接受这些值，已保留供你修改。',
+        readOnly: '本部署的设置为只读。',
+        unavailable: '该插件当前未加载，暂时无法配置。',
+      },
+      en: {
+        title: 'Badge',
+        description: 'The unread badge and chime for finished turns.',
+        badgeColorLabel: 'Badge colour',
+        badgeColorHint: 'Hex colour such as #f5455c.',
+        badgePositionLabel: 'Badge corner',
+        badgePositionHint: 'br for the bottom-right corner, tr for the top-right.',
+        soundPresetLabel: 'Chime',
+        soundPresetHint: 'chime is a two-note bell, beep a single square blip.',
+        volumeLabel: 'Volume',
+        volumeHint: 'A decimal between 0 and 1.',
+        minTurnDurationMsLabel: 'Minimum turn length (ms)',
+        minTurnDurationHint: 'Shorter turns stay quiet and raise no badge.',
+        overridden: 'Overridden',
+        reset: 'Reset to default',
+        invalid: 'That value is not valid; fix it before saving.',
+        save: 'Save',
+        saving: 'Saving…',
+        saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
+        readOnly: 'This deployment stores settings read-only.',
+        unavailable: 'This plugin is not loaded, so it cannot be configured right now.',
+      },
+    }
+
+    var FIELDS = ['badgeColor', 'badgePosition', 'soundPreset', 'volume', 'minTurnDurationMs']
+
+    function setupSettingsCard(ctx) {
+      var configForms = ctx && typeof ctx.get === 'function' ? ctx.get('configForms') : null
+      var slots = ctx && typeof ctx.get === 'function' ? ctx.get('slots') : null
+      var locale = ctx && typeof ctx.get === 'function' ? ctx.get('locale') : null
+      if (!configForms || !slots || !locale) return
+      if (typeof configForms.whileServed !== 'function') return
+
+      var runtime
+      var primitives
+      try {
+        runtime = require('react/jsx-runtime')
+        primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+      } catch (error) {
+        return
+      }
+
+      var jsx = runtime.jsx
+      var jsxs = runtime.jsxs
+      var SettingsForm = primitives.SettingsForm
+      var SettingsValueField = primitives.SettingsValueField
+      var SettingsFormModel = primitives.SettingsFormModel
+      if (!jsx || !SettingsForm || !SettingsValueField || !SettingsFormModel) return
+
+      var t = locale.bind(SETTINGS_NS)
+      ctx.effect(function () {
+        return locale.register(SETTINGS_NS, COPY)
+      }, 'dsh-badge: settings copy')
+
+      function formLabels() {
+        return {
+          unavailable: t('unavailable'),
+          readOnly: t('readOnly'),
+          saveFailed: t('saveFailed'),
+          save: t('save'),
+          saving: t('saving'),
+        }
+      }
+
+      function BadgeCardController(scope) {
+        var self = this
+        this.form = new SettingsFormModel(scope, [
+          primitives.settingsTextField('badgeColor'),
+          primitives.settingsTextField('badgePosition'),
+          primitives.settingsTextField('soundPreset'),
+          primitives.settingsNumberField('volume'),
+          primitives.settingsNumberField('minTurnDurationMs'),
+        ])
+        this.store = this.form.bind(function () {
+          var snapshot = self.form.shell()
+          for (var i = 0; i < FIELDS.length; i += 1) {
+            snapshot[FIELDS[i]] = self.form.field(FIELDS[i])
+          }
+          return snapshot
+        })
+      }
+      BadgeCardController.prototype.inject = function () {
+        var face = { hooks: { badgeCard: this.store } }
+        var actions = this.form.actions()
+        for (var key in actions) face[key] = actions[key]
+        return face
+      }
+      BadgeCardController.prototype.dispose = function () {
+        this.form.dispose()
+      }
+
+      function BadgeCard(props) {
+        var translate = props.t || t
+        var state = props.useBadgeCard(function (snapshot) {
+          return snapshot
+        })
+        if (props.view === 'summary') return translate('description')
+
+        var children = FIELDS.map(function (name) {
+          var field = {
+            key: name,
+            id: 'plugin-config-badge-' + name,
+            label: translate(name + 'Label'),
+            hint: translate(name + 'Hint'),
+            overriddenLabel: translate('overridden'),
+            resetLabel: translate('reset'),
+            invalidLabel: translate('invalid'),
+            numeric: name === 'volume' || name === 'minTurnDurationMs',
+            disabled: !state.writable,
+            onEdit: function (text) {
+              props.edit(name, text)
+            },
+            onReset: function () {
+              props.resetField(name)
+            },
+          }
+          var snapshot = state[name]
+          for (var key in snapshot) field[key] = snapshot[key]
+          return jsx(SettingsValueField, field)
+        })
+
+        return jsxs(SettingsForm, {
+          labels: formLabels(),
+          state: state,
+          onSave: props.save,
+          onDiscard: props.discard,
+          children: children,
+        })
+      }
+
+      ctx.effect(function () {
+        return configForms.whileServed(NAMESPACES, function (served) {
+          var namespace = NAMESPACES[0]
+          if (served && typeof served.has === 'function' && !served.has(namespace)) {
+            namespace = NAMESPACES[1]
+          }
+          var controller = new BadgeCardController(configForms.get(namespace))
+          var remove = slots.inject('plugins.item', function () {
+            return slots.register({
+              name: 'plugins.item',
+              id: 'badge',
+              order: 45,
+              label: function () {
+                return t('title')
+              },
+              locale: SETTINGS_NS,
+              inject: function () {
+                return controller.inject()
+              },
+            }, BadgeCard)
+          })
+          return function () {
+            try {
+              remove()
+            } catch (error) {}
+            try {
+              controller.dispose()
+            } catch (error) {}
+          }
+        })
+      }, 'dsh-badge: settings card')
+    }
+
     /* ------------------------------------------------------------------ apply */
 
     function apply(ctx, config) {
@@ -345,6 +540,11 @@ window.__ModuleLoader__.load({
 
       var sessions = ctx && typeof ctx.get === 'function' ? ctx.get('sessions') : null
       if (sessions) watchSessions(sessions, ctx)
+
+      // A broken settings card must never cost the user the badge or the chime.
+      try {
+        setupSettingsCard(ctx)
+      } catch (error) {}
 
       // Manual hooks: `__DSH_BADGE__.test(3)` in the devtools console,
       // and the same surface the demo page drives.

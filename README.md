@@ -79,11 +79,19 @@
 | `volume` | `0.5` | 音量，0 到 1 |
 | `minTurnDurationMs` | `3000` | 短于该时长的回合不计角标、不响 |
 | `clearOnFocus` | `true` | 标签页重新可见时清零 |
+| `badgeColor` | `#f5455c` | 角标圆点颜色，十六进制 |
+| `badgePosition` | `br` | 角标位置，`br` 右下角，`tr` 右上角 |
 | `errorSound` | `false` | 回合失败时播放低音提示 |
 | `desktopBadge` | `true` | Windows 专用：是否在任务栏按钮上画数字角标 |
 | `desktopBadgeWindow` | `DeepSeek Harness` | 承载任务栏按钮的进程名 |
 | `desktopBadgeClearOnFocus` | `true` | 窗口切回前台时清除任务栏角标 |
 | `debugLog` | `''` | 填一个文件路径，插件每次加载时向该文件追加一行，用来区分「没挂载」和「浏览器没画出来」 |
+
+## 设置页
+
+设置侧边栏的 **Plugins** 页里有一张「角标」卡，可以直接改角标颜色、角标位置、提示音、音量、最短回合时长，改完点保存。
+
+实现上，卡注册进 `plugins.item` 槽，只在 Host 提供对应设置命名空间时才出现，所以没装这个插件的部署看不到它。字段组件只支持文本框（数字框另开 `numeric`），没有开关和下拉，因此布尔项仍走配置文件。
 
 ## 手动验证
 

@@ -43,6 +43,10 @@ export const Config = Schema.object({
     .description('Reset the unread count when the tab regains focus.'),
   errorSound: Schema.boolean().default(false)
     .description('Play a lower two-tone alert when a turn fails.'),
+  badgeColor: Schema.string().default('#f5455c')
+    .description('Hex colour of the badge disc, for example #f5455c.'),
+  badgePosition: Schema.string().default('br')
+    .description('Corner the badge sits in: "br" bottom-right, "tr" top-right.'),
   desktopBadge: Schema.boolean().default(true)
     .description('Windows only: paint the count on the app taskbar button through taskbar.ps1.'),
   desktopBadgeWindow: Schema.string().default('DeepSeek Harness')
