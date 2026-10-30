@@ -98,6 +98,8 @@ npm test        # 单元测试（node --test，用 DOM 桩驱动真实 client.js
 
 仓库没有构建步骤：`client.js` 手写成 `window.__ModuleLoader__.load({ id, factory })` 要求的形状，改完直接生效。
 
+把仓库以目录链接的方式装进 profile 时，Node 会按仓库真实路径解析依赖，`@deepseek-ai/schemastery` 会找不到。在仓库里建一个 `node_modules/@deepseek-ai/schemastery` 指向 profile 中的同名包即可（`node_modules/` 已加入 `.gitignore`）。
+
 ## 已知限制
 
 - 角标只作用于浏览器标签页图标（favicon）。DSH 桌面版的任务栏图标由 Electron 主进程绘制，插件改不到；桌面版能看到的是窗口标题的 `(N)` 前缀。
