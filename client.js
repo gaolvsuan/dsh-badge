@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var exports = module.exports
 
-    var inject = ['sessions']
+    var inject = ['sessions', 'slots', 'locale', 'configForms']
 
     var ICON_SIZE = 64
     var BADGE_COLOR = '#f5455c'
@@ -406,12 +406,14 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.4.1', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.4.3', reason: '', served: null, registered: false }
 
     function setupSettingsCard(ctx) {
-      var configForms = ctx && typeof ctx.get === 'function' ? ctx.get('configForms') : null
-      var slots = ctx && typeof ctx.get === 'function' ? ctx.get('slots') : null
-      var locale = ctx && typeof ctx.get === 'function' ? ctx.get('locale') : null
+      // Declared in `inject`, so cordis hands these to apply as context
+      // properties. `ctx.get(name)` does not reach them on the web client.
+      var configForms = (ctx && ctx.configForms) || null
+      var slots = (ctx && ctx.slots) || null
+      var locale = (ctx && ctx.locale) || null
       if (!configForms || !slots || !locale) {
         DIAG.reason = 'missing service: ' + [!configForms && 'configForms', !slots && 'slots', !locale && 'locale'].filter(Boolean).join(',')
         return

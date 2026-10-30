@@ -330,11 +330,12 @@ function makeSettingsCtx(sessions, stubs) {
   const base = makeCtx(sessions)
   return {
     ...base,
+    // Declared in `inject`, so the services arrive as context properties.
+    configForms: stubs.configForms,
+    slots: stubs.slots,
+    locale: stubs.locale,
     get(name) {
       if (name === 'sessions') return sessions
-      if (name === 'configForms') return stubs.configForms
-      if (name === 'slots') return stubs.slots
-      if (name === 'locale') return stubs.locale
       return null
     },
   }
