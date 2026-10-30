@@ -1,6 +1,6 @@
 # dsh-badge
 
-DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数字角标，并播放提示音。
+和 ChatGPT 标签页右上角那个红色数字角标同一个东西，搬到 DeepSeek Harness：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数，并播放提示音。
 
 ## 效果
 
