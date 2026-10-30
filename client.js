@@ -1,4 +1,4 @@
-/* dsh-badge — client bundle.
+/* dsh-badge 鈥?client bundle.
  *
  * Two things the host half cannot do, because both belong to the page:
  *
@@ -345,32 +345,32 @@ window.__ModuleLoader__.load({
 
     var COPY = {
       zh: {
-        title: '角标',
-        description: '回合结束时的未读角标与提示音。',
-        badgeColorLabel: '角标颜色',
-        badgeColorHint: '十六进制颜色，例如 #f5455c。',
-        badgePositionLabel: '角标位置',
-        badgePositionHint: 'br 表示右下角，tr 表示右上角。',
-        soundPresetLabel: '提示音',
-        soundPresetHint: 'chime 是两音铃声，beep 是单声方波。',
-        volumeLabel: '音量',
-        volumeHint: '0 到 1 之间的小数。',
-        minTurnDurationMsLabel: '最短回合时长（毫秒）',
-        minTurnDurationHint: '短于该时长的回合不计角标、不响。',
-        positionBottomRight: '右下角',
-        positionTopRight: '右上角',
-        presetChime: '两音铃声',
-        presetBeep: '单声方波',
-        preview: '试听',
-        discard: '取消修改',
-        overridden: '已覆盖',
-        reset: '恢复默认',
-        invalid: '这个值不合法，改好再保存。',
-        save: '保存',
-        saving: '保存中…',
-        saveFailed: '部署没有接受这些值，已保留供你修改。',
-        readOnly: '本部署的设置为只读。',
-        unavailable: '该插件当前未加载，暂时无法配置。',
+        title: '瑙掓爣',
+        description: '鍥炲悎缁撴潫鏃剁殑鏈瑙掓爣涓庢彁绀洪煶銆?,
+        badgeColorLabel: '瑙掓爣棰滆壊',
+        badgeColorHint: '鍗佸叚杩涘埗棰滆壊锛屼緥濡?#f5455c銆?,
+        badgePositionLabel: '瑙掓爣浣嶇疆',
+        badgePositionHint: 'br 琛ㄧず鍙充笅瑙掞紝tr 琛ㄧず鍙充笂瑙掋€?,
+        soundPresetLabel: '鎻愮ず闊?,
+        soundPresetHint: 'chime 鏄袱闊抽搩澹帮紝beep 鏄崟澹版柟娉€?,
+        volumeLabel: '闊抽噺',
+        volumeHint: '0 鍒?1 涔嬮棿鐨勫皬鏁般€?,
+        minTurnDurationMsLabel: '鏈€鐭洖鍚堟椂闀匡紙姣锛?,
+        minTurnDurationHint: '鐭簬璇ユ椂闀跨殑鍥炲悎涓嶈瑙掓爣銆佷笉鍝嶃€?,
+        positionBottomRight: '鍙充笅瑙?,
+        positionTopRight: '鍙充笂瑙?,
+        presetChime: '涓ら煶閾冨０',
+        presetBeep: '鍗曞０鏂规尝',
+        preview: '璇曞惉',
+        discard: '鍙栨秷淇敼',
+        overridden: '宸茶鐩?,
+        reset: '鎭㈠榛樿',
+        invalid: '杩欎釜鍊间笉鍚堟硶锛屾敼濂藉啀淇濆瓨銆?,
+        save: '淇濆瓨',
+        saving: '淇濆瓨涓€?,
+        saveFailed: '閮ㄧ讲娌℃湁鎺ュ彈杩欎簺鍊硷紝宸蹭繚鐣欎緵浣犱慨鏀广€?,
+        readOnly: '鏈儴缃茬殑璁剧疆涓哄彧璇汇€?,
+        unavailable: '璇ユ彃浠跺綋鍓嶆湭鍔犺浇锛屾殏鏃舵棤娉曢厤缃€?,
       },
       en: {
         title: 'Badge',
@@ -395,7 +395,7 @@ window.__ModuleLoader__.load({
         reset: 'Reset to default',
         invalid: 'That value is not valid; fix it before saving.',
         save: 'Save',
-        saving: 'Saving…',
+        saving: 'Saving鈥?,
         saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
         readOnly: 'This deployment stores settings read-only.',
         unavailable: 'This plugin is not loaded, so it cannot be configured right now.',
@@ -406,7 +406,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.4.4', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.4.5', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -436,6 +436,25 @@ window.__ModuleLoader__.load({
       if (typeof configForms.whileServed !== 'function') {
         DIAG.reason = 'configForms has no whileServed'
         return
+      }
+
+      // Ask the mirror which namespaces the Host actually serves, so a blank
+      // page names the reason instead of leaving it to guesswork.
+      try {
+        DIAG.formsApi = Object.keys(configForms)
+        if (typeof configForms.describe === 'function') {
+          var described = configForms.describe()
+          if (described && typeof described === 'object') {
+            DIAG.describeKeys = Object.keys(described).slice(0, 12)
+            DIAG.describe = Array.from(
+              described.namespaces || described.served || described.entries || Object.keys(described),
+            ).slice(0, 40)
+          } else {
+            DIAG.describe = String(described)
+          }
+        }
+      } catch (error) {
+        DIAG.describe = 'err: ' + (error && error.message)
       }
 
       var runtime
