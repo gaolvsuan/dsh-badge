@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dsh-badge-notify 演示</title>
+  <title>dsh-badge 演示</title>
   <!-- 一个自带图标的 base icon，用来验证「在站点原图标上盖角标」这条路径 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234d6bfe'/%3E%3Ctext x='32' y='43' font-family='system-ui' font-size='30' font-weight='700' fill='%23fff' text-anchor='middle'%3EDS%3C/text%3E%3C/svg%3E">
   <style>
@@ -40,7 +40,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>dsh-badge-notify 演示</h1>
+    <h1>dsh-badge 演示</h1>
     <p class="sub">这个页面加载的是仓库里真实的 <code>client.js</code>，只把 DSH 的 sessions 服务换成了假数据。看浏览器标签页图标和标题。</p>
 
     <div class="card">
@@ -131,7 +131,7 @@
     }
 
     function refresh() {
-      var api = window.__DSH_BADGE_NOTIFY__
+      var api = window.__DSH_BADGE__
       el.count.textContent = api ? String(api.getCount()) : '—'
       el.title.textContent = document.title
       var href = (document.querySelector('link[rel~="icon"]') || {}).href || ''
@@ -147,13 +147,13 @@
       sessions.set({ running: false })
     })
     document.getElementById('sound').addEventListener('click', function () {
-      window.__DSH_BADGE_NOTIFY__.sound('done')
+      window.__DSH_BADGE__.sound('done')
     })
     document.getElementById('plus').addEventListener('click', function () {
-      window.__DSH_BADGE_NOTIFY__.test()
+      window.__DSH_BADGE__.test()
     })
     document.getElementById('reset').addEventListener('click', function () {
-      window.__DSH_BADGE_NOTIFY__.clear()
+      window.__DSH_BADGE__.clear()
     })
 
     // ?auto=1 自动跑一遍「开始回合 → 结束回合」，把结果写进 DOM，
@@ -163,7 +163,7 @@
       try {
         sessions.set({ running: true })
         sessions.set({ running: false })
-        var api = window.__DSH_BADGE_NOTIFY__
+        var api = window.__DSH_BADGE__
         var href = document.querySelector('link[rel~="icon"]').getAttribute('href') || ''
         report = {
           ok: true,

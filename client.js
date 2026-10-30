@@ -1,4 +1,4 @@
-/* dsh-badge-notify — client bundle.
+/* dsh-badge — client bundle.
  *
  * Two things the host half cannot do, because both belong to the page:
  *
@@ -16,7 +16,7 @@
  * step: window.__ModuleLoader__.load({ id, factory }).
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-badge-notify',
+  id: 'dsh-badge',
   factory: function (require) {
     var module = { exports: {} }
     var exports = module.exports
@@ -325,7 +325,7 @@ window.__ModuleLoader__.load({
           return function () {
             unsubscribe()
           }
-        }, 'dsh-badge-notify: session watch')
+        }, 'dsh-badge: session watch')
       }
     }
 
@@ -344,9 +344,9 @@ window.__ModuleLoader__.load({
       var sessions = ctx && typeof ctx.get === 'function' ? ctx.get('sessions') : null
       if (sessions) watchSessions(sessions, ctx)
 
-      // Manual hooks: `__DSH_BADGE_NOTIFY__.test(3)` in the devtools console,
+      // Manual hooks: `__DSH_BADGE__.test(3)` in the devtools console,
       // and the same surface the demo page drives.
-      window.__DSH_BADGE_NOTIFY__ = {
+      window.__DSH_BADGE__ = {
         config: cfg,
         test: function (count) {
           state.unread = typeof count === 'number' && count > 0 ? Math.floor(count) : 1

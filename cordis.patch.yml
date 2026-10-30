@@ -1,5 +1,5 @@
-# Layer contributed when a profile lists this bundle (dsh plugin add dsh-badge-notify).
+# Layer contributed when a profile lists this bundle (dsh plugin add dsh-badge).
 # Users can override any of these config values in their profile's cordis.patch.yml.
 - insert:
-    - id: badge-notify
-      name: dsh-badge-notify
+    - id: badge
+      name: dsh-badge

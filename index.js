@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
 
-export const name = 'dsh-badge-notify'
+export const name = 'dsh-badge'
 
 /**
  * Two halves, two different windows onto the same event.
@@ -177,7 +177,7 @@ export function apply(ctx, config) {
   // Log once at debug level so a plugin inventory page can show that the
   // config reached this half.
   try {
-    ctx?.logger?.debug?.('dsh-badge-notify: loaded with %o', config)
+    ctx?.logger?.debug?.('dsh-badge: loaded with %o', config)
   } catch {
     // A logger must never take the plugin down.
   }
@@ -200,7 +200,7 @@ export function apply(ctx, config) {
     watchTurnsForTaskbar(ctx, config || {})
   } catch (error) {
     try {
-      ctx?.logger?.warn?.('dsh-badge-notify: taskbar badge unavailable: %s', error?.message)
+      ctx?.logger?.warn?.('dsh-badge: taskbar badge unavailable: %s', error?.message)
     } catch {
       // Nothing left to report to.
     }

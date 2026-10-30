@@ -1,4 +1,4 @@
-# dsh-badge-notify
+# dsh-badge
 
 DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数字角标，并播放提示音。
 
@@ -14,7 +14,7 @@ DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏
 
 ## 与 dsh-notification 的关系
 
-| 能力 | dsh-notification | dsh-badge-notify |
+| 能力 | dsh-notification | dsh-badge |
 | --- | --- | --- |
 | 系统通知 / webhook | ✅ | ❌ |
 | 图标数字角标 | ❌ | ✅ |
@@ -27,7 +27,7 @@ DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏
 
 ### 从插件市场安装
 
-在市场里搜索 `dsh-badge-notify` 后安装，安装完成后按市场提示重启或等待热挂载。
+在市场里搜索 `dsh-badge` 后安装，安装完成后按市场提示重启或等待热挂载。
 
 ### 手工安装（本地开发）
 
@@ -36,13 +36,13 @@ DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏
 ```jsonc
 {
   "dependencies": {
-    "dsh-badge-notify": "file:E:/AI工作站/deepseek插件编写"
+    "dsh-badge": "file:E:/AI工作站/deepseek插件编写"
   },
   "dsh": {
     "profile": {
       "bundles": [
         // ...原有内容
-        "dsh-badge-notify"
+        "dsh-badge"
       ]
     }
   }
@@ -53,11 +53,11 @@ DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏
 
 ## 配置
 
-在 profile 的 `cordis.patch.yml` 里覆盖默认值（`id` 与 `name` 两项都要写，`id` 对应 `cordis.patch.yml` 里插入时用的 `badge-notify`）：
+在 profile 的 `cordis.patch.yml` 里覆盖默认值（`id` 与 `name` 两项都要写，`id` 对应 `cordis.patch.yml` 里插入时用的 `badge`）：
 
 ```yaml
-- id: badge-notify
-  name: dsh-badge-notify
+- id: badge
+  name: dsh-badge
   config:
     volume: 0.6
     soundPreset: beep
@@ -86,9 +86,9 @@ DeepSeek Harness 插件：回合结束时在标签页图标和 Windows 任务栏
 浏览器开发者工具控制台里：
 
 ```js
-__DSH_BADGE_NOTIFY__.test(3)   // 角标显示 3 并响一声
-__DSH_BADGE_NOTIFY__.clear()   // 清零
-__DSH_BADGE_NOTIFY__.sound()   // 只试听音效
+__DSH_BADGE__.test(3)   // 角标显示 3 并响一声
+__DSH_BADGE__.clear()   // 清零
+__DSH_BADGE__.sound()   // 只试听音效
 ```
 
 `demo/index.html` 是一个独立演示页，直接双击打开即可。它加载仓库里真实的 `client.js`，只把 DSH 的 sessions 服务换成假数据，用来单独验证角标和音效。

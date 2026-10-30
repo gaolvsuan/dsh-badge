@@ -49,7 +49,7 @@ test('a finished turn reaches the taskbar helper', { skip: process.platform !== 
     return
   }
 
-  const logPath = path.join(os.tmpdir(), `dsh-badge-notify-host-${process.pid}.log`)
+  const logPath = path.join(os.tmpdir(), `dsh-badge-host-${process.pid}.log`)
   fs.rmSync(logPath, { force: true })
 
   const ctx = createCtx()
@@ -89,7 +89,7 @@ test('turns shorter than minTurnDurationMs never reach the helper', { skip: proc
     return
   }
 
-  const logPath = path.join(os.tmpdir(), `dsh-badge-notify-skip-${process.pid}.log`)
+  const logPath = path.join(os.tmpdir(), `dsh-badge-skip-${process.pid}.log`)
   fs.rmSync(logPath, { force: true })
 
   const ctx = createCtx()

@@ -171,7 +171,7 @@ test('apply exposes the manual API and leaves the favicon alone until a turn end
   const sessions = createSessions()
   mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
 
-  const api = env.window.__DSH_BADGE_NOTIFY__
+  const api = env.window.__DSH_BADGE__
   assert.ok(api, 'manual API must be exposed')
   assert.equal(api.getCount(), 0)
   assert.equal(env.document.title, 'DeepSeek Harness')
@@ -186,7 +186,7 @@ test('a finished turn increments the badge, prefixes the title and redraws the i
   sessions.update('session-a', { running: true })
   sessions.update('session-a', { running: false })
 
-  assert.equal(env.window.__DSH_BADGE_NOTIFY__.getCount(), 1)
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 1)
   assert.equal(env.document.title, '(1) DeepSeek Harness')
   assert.equal(env.faviconWrites.length, 1)
   assert.match(env.faviconWrites[0], /^data:image\/png/)
@@ -199,9 +199,9 @@ test('clear resets both the count and the title', async () => {
 
   sessions.update('session-a', { running: true })
   sessions.update('session-a', { running: false })
-  env.window.__DSH_BADGE_NOTIFY__.clear()
+  env.window.__DSH_BADGE__.clear()
 
-  assert.equal(env.window.__DSH_BADGE_NOTIFY__.getCount(), 0)
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 0)
   assert.equal(env.document.title, 'DeepSeek Harness')
 })
 
@@ -213,7 +213,7 @@ test('turns shorter than minTurnDurationMs stay silent', async () => {
   sessions.update('session-a', { running: true })
   sessions.update('session-a', { running: false })
 
-  assert.equal(env.window.__DSH_BADGE_NOTIFY__.getCount(), 0)
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 0)
   assert.equal(env.document.title, 'DeepSeek Harness')
 })
 
@@ -225,7 +225,7 @@ test('subagent sessions never raise the badge', async () => {
   sessions.update('session-sub', { running: true })
   sessions.update('session-sub', { running: false })
 
-  assert.equal(env.window.__DSH_BADGE_NOTIFY__.getCount(), 0)
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 0)
 })
 
 test('badge:false keeps the icon untouched while the title still counts', async () => {
@@ -236,7 +236,7 @@ test('badge:false keeps the icon untouched while the title still counts', async 
   sessions.update('session-a', { running: true })
   sessions.update('session-a', { running: false })
 
-  assert.equal(env.window.__DSH_BADGE_NOTIFY__.getCount(), 1)
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 1)
   assert.equal(env.document.title, '(1) DeepSeek Harness')
   assert.equal(env.faviconWrites.length, 0)
 })
@@ -249,6 +249,6 @@ test('enabled:false leaves the plugin inert', async () => {
   sessions.update('session-a', { running: true })
   sessions.update('session-a', { running: false })
 
-  assert.equal(env.window.__DSH_BADGE_NOTIFY__, undefined)
+  assert.equal(env.window.__DSH_BADGE__, undefined)
   assert.equal(env.document.title, 'DeepSeek Harness')
 })
