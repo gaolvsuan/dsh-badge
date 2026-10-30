@@ -408,6 +408,26 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
   )
 })
 
+test('unwraps volatile references handed over by the loader', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+
+  mod.apply(makeCtx(sessions), {
+    minTurnDurationMs: { get: () => 0 },
+    badgeColor: { get: () => '#3b82f6' },
+    badgePosition: { get: () => 'tr' },
+    soundPreset: { get: () => 'rise' },
+    volume: { get: () => 0.8 },
+  })
+
+  const cfg = env.window.__DSH_BADGE__.config
+  assert.equal(cfg.badgeColor, '#3b82f6')
+  assert.equal(cfg.badgePosition, 'tr')
+  assert.equal(cfg.soundPreset, 'rise')
+  assert.equal(cfg.volume, 0.8)
+  assert.equal(cfg.minTurnDurationMs, 0)
+})
+
 test('a missing configForms service never breaks the badge', async () => {
   const { env, mod } = await loadClient()
   const sessions = createSessions()

@@ -59,6 +59,8 @@ test('a finished turn reaches the taskbar helper', { skip: process.platform !== 
     minTurnDurationMs: 0,
     debugLog: logPath,
     desktopBadgeClearOnFocus: false,
+    // The loader hands volatile fields over as references with get().
+    badgeColor: { get: () => '#3b82f6' },
   })
 
   try {
@@ -74,6 +76,10 @@ test('a finished turn reaches the taskbar helper', { skip: process.platform !== 
     }, 20_000)
 
     assert.ok(shown, `helper never reported a painted badge; log:\n${readLog(logPath)}`)
+    assert.ok(
+      readLog(logPath).includes('helper-spawn badgeColor=#3b82f6'),
+      `helper started without the configured colour; log:\n${readLog(logPath)}`,
+    )
   } finally {
     ctx.dispose()
     fs.rmSync(logPath, { force: true })

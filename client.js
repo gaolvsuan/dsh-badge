@@ -41,19 +41,39 @@ window.__ModuleLoader__.load({
 
     function readConfig(raw) {
       var cfg = raw || {}
+
+      // A volatile field can arrive as a reference with get(); reading it as a
+      // plain value yields the object and every check falls back to the default.
+      function pick(name, fallback) {
+        var value = cfg[name]
+        if (value === undefined || value === null) return fallback
+        if (typeof value === 'object' && typeof value.get === 'function') {
+          try {
+            value = value.get()
+          } catch (error) {
+            return fallback
+          }
+        }
+        return value === undefined || value === null ? fallback : value
+      }
+
+      var volumeValue = Number(pick('volume', 0.5))
+      var durationValue = Number(pick('minTurnDurationMs', 3000))
+      var colorValue = String(pick('badgeColor', '') || '')
+
       return {
-        enabled: cfg.enabled !== false,
-        badge: cfg.badge !== false,
-        titlePrefix: cfg.titlePrefix !== false,
-        sound: cfg.sound !== false,
-        soundPreset: typeof cfg.soundPreset === 'string' ? cfg.soundPreset : 'chime',
-        soundUrl: typeof cfg.soundUrl === 'string' ? cfg.soundUrl : '',
-        volume: typeof cfg.volume === 'number' ? Math.min(1, Math.max(0, cfg.volume)) : 0.5,
-        minTurnDurationMs: typeof cfg.minTurnDurationMs === 'number' ? cfg.minTurnDurationMs : 3000,
-        clearOnFocus: cfg.clearOnFocus !== false,
-        errorSound: cfg.errorSound === true,
-        badgeColor: /^#[0-9a-f]{3,8}$/i.test(String(cfg.badgeColor || '')) ? String(cfg.badgeColor) : '#f5455c',
-        badgePosition: cfg.badgePosition === 'tr' ? 'tr' : 'br',
+        enabled: pick('enabled', true) !== false,
+        badge: pick('badge', true) !== false,
+        titlePrefix: pick('titlePrefix', true) !== false,
+        sound: pick('sound', true) !== false,
+        soundPreset: typeof pick('soundPreset', 'chime') === 'string' ? pick('soundPreset', 'chime') : 'chime',
+        soundUrl: typeof pick('soundUrl', '') === 'string' ? pick('soundUrl', '') : '',
+        volume: isFinite(volumeValue) ? Math.min(1, Math.max(0, volumeValue)) : 0.5,
+        minTurnDurationMs: isFinite(durationValue) ? durationValue : 3000,
+        clearOnFocus: pick('clearOnFocus', true) !== false,
+        errorSound: pick('errorSound', false) === true,
+        badgeColor: /^#[0-9a-f]{3,8}$/i.test(colorValue) ? colorValue : '#f5455c',
+        badgePosition: pick('badgePosition', 'br') === 'tr' ? 'tr' : 'br',
       }
     }
 
@@ -436,7 +456,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.6.4', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.7.0', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context

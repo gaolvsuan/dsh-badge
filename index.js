@@ -71,8 +71,26 @@ function helperScript() {
   return fileURLToPath(new URL('./taskbar.ps1', import.meta.url))
 }
 
+// A volatile field does not arrive as a plain value: the loader hands the
+// plugin a reference with get(). Reading it directly yields the object, and
+// every colour check silently fell back to the default.
+function readConfigValue(config, name, fallback) {
+  if (!config) return fallback
+  const raw = config[name]
+  if (raw === undefined || raw === null) return fallback
+  if (typeof raw === 'object' && typeof raw.get === 'function') {
+    try {
+      const resolved = raw.get()
+      return resolved === undefined ? fallback : resolved
+    } catch {
+      return fallback
+    }
+  }
+  return raw
+}
+
 function badgeColorOf(config) {
-  const value = String((config && config.badgeColor) || '')
+  const value = String(readConfigValue(config, 'badgeColor', '') || '')
   return /^#[0-9a-f]{3,8}$/i.test(value) ? value : '#f5455c'
 }
 
@@ -174,7 +192,8 @@ function watchTurnsForTaskbar(ctx, config) {
   }
 
   const startedAt = new Map()
-  const minDuration = typeof config.minTurnDurationMs === 'number' ? config.minTurnDurationMs : 3000
+  const minDurationValue = Number(readConfigValue(config, 'minTurnDurationMs', 3000))
+  const minDuration = Number.isFinite(minDurationValue) ? minDurationValue : 3000
 
   ctx.on('agent/status', ({ agent, status }) => {
     if (status === 'running') {
@@ -223,7 +242,7 @@ export function apply(ctx, config) {
     if (config?.debugLog) {
       appendFileSync(
         config.debugLog,
-        `loaded ${new Date().toISOString()} pid=${process.pid} badgeColor=${String(config.badgeColor)} keys=${Object.keys(config).join('|')}\n`,
+        `loaded ${new Date().toISOString()} pid=${process.pid} badgeColor=${String(readConfigValue(config, 'badgeColor', ''))} keys=${Object.keys(config).join('|')}\n`,
       )
     }
   } catch {
