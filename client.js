@@ -436,7 +436,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.6.0', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.6.1', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -489,9 +489,11 @@ window.__ModuleLoader__.load({
 
       var runtime
       var primitives
+      var react
       try {
         runtime = require('react/jsx-runtime')
         primitives = require('@deepseek-ai/dsh-client-ui-primitives')
+        react = require('react')
       } catch (error) {
         DIAG.reason = 'require failed: ' + (error && error.message)
         return
@@ -500,8 +502,8 @@ window.__ModuleLoader__.load({
       var jsx = runtime.jsx
       var jsxs = runtime.jsxs
       var SettingsFormModel = primitives.SettingsFormModel
-      if (!jsx || !jsxs || !SettingsFormModel) {
-        DIAG.reason = 'primitives missing jsx runtime or SettingsFormModel'
+      if (!jsx || !jsxs || !SettingsFormModel || !react || typeof react.useState !== 'function') {
+        DIAG.reason = 'primitives missing jsx runtime, SettingsFormModel or useState'
         return
       }
 
@@ -597,12 +599,21 @@ window.__ModuleLoader__.load({
         var snapshot = props.useBadgeCard(function (state) {
           return state
         })
+        // The staged form echoes the Host's accepted value back, which can land
+        // a frame late and snap a fresh pick back to the previous one. The local
+        // draft wins until the accepted value catches up.
+        var draftPair = react.useState({})
+        var draft = draftPair[0] || {}
+        var setDraft = draftPair[1]
         if (props.view === 'summary') return translate('description')
 
         var writable = snapshot.writable !== false
         var text = function (name) {
           var field = snapshot[name]
           return field && typeof field.text === 'string' ? field.text : ''
+        }
+        var value = function (name) {
+          return Object.prototype.hasOwnProperty.call(draft, name) ? draft[name] : text(name)
         }
 
         // Changes take effect on the badge as they are made, and a short debounce
@@ -616,6 +627,11 @@ window.__ModuleLoader__.load({
         var edit = function (name) {
           return function (value) {
             props.edit(name, String(value))
+            setDraft(function (previous) {
+              var next = Object.assign({}, previous)
+              next[name] = String(value)
+              return next
+            })
             var patch = {}
             if (name === 'volume') patch.volume = Number(value)
             else if (name === 'minTurnDurationMs') patch.minTurnDurationMs = Number(value) || 0
@@ -640,12 +656,12 @@ window.__ModuleLoader__.load({
           })
         }
 
-        var color = text('badgeColor') || '#f5455c'
-        var position = text('badgePosition') || 'br'
-        var preset = text('soundPreset') || 'chime'
-        var volume = Number(text('volume'))
+        var color = value('badgeColor') || '#f5455c'
+        var position = value('badgePosition') || 'br'
+        var preset = value('soundPreset') || 'chime'
+        var volume = Number(value('volume'))
         if (!isFinite(volume)) volume = 0.5
-        var duration = text('minTurnDurationMs') || '3000'
+        var duration = value('minTurnDurationMs') || '3000'
 
         var colorRow = jsxs('div', {
           style: ROW,

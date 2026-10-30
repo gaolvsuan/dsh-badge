@@ -294,7 +294,21 @@ function createSettingsStubs() {
     jsxs: (type, props) => ({ type, props }),
   }
 
+  // Minimal React surface: the card only needs useState outside a real renderer.
+  const react = {
+    useState(initial) {
+      let current = initial
+      return [
+        current,
+        (next) => {
+          current = typeof next === 'function' ? next(current) : next
+        },
+      ]
+    },
+  }
+
   const require = (id) => {
+    if (id === 'react') return react
     if (id === 'react/jsx-runtime') return runtime
     if (id === '@deepseek-ai/dsh-client-ui-primitives') return primitives
     throw new Error('unexpected require: ' + id)

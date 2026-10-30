@@ -1,6 +1,6 @@
 {
   "name": "dsh-badge",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "The ChatGPT-style unread badge, for DeepSeek Harness: a red count on the tab icon and taskbar button, plus one chime per finished turn.",
   "type": "module",
   "main": "index.js",
