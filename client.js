@@ -52,6 +52,8 @@ window.__ModuleLoader__.load({
         minTurnDurationMs: typeof cfg.minTurnDurationMs === 'number' ? cfg.minTurnDurationMs : 3000,
         clearOnFocus: cfg.clearOnFocus !== false,
         errorSound: cfg.errorSound === true,
+        badgeColor: /^#[0-9a-f]{3,8}$/i.test(String(cfg.badgeColor || '')) ? String(cfg.badgeColor) : '#f5455c',
+        badgePosition: cfg.badgePosition === 'tr' ? 'tr' : 'br',
       }
     }
 
@@ -119,12 +121,12 @@ window.__ModuleLoader__.load({
       if (count > 0) {
         var label = count > 99 ? '99+' : String(count)
         var r = ICON_SIZE * 0.33
-        var cx = ICON_SIZE - r - 1
+        var cx = cfg.badgePosition === 'tr' ? r + 1 : ICON_SIZE - r - 1
         var cy = r + 1
 
         g.beginPath()
         g.arc(cx, cy, r, 0, Math.PI * 2)
-        g.fillStyle = BADGE_COLOR
+        g.fillStyle = cfg.badgeColor
         g.fill()
         g.lineWidth = 3
         g.strokeStyle = 'rgba(255, 255, 255, 0.92)'
