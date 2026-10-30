@@ -406,7 +406,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.4.5', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.5.0', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -756,6 +756,19 @@ window.__ModuleLoader__.load({
               disabled: !writable || snapshot.saving === true,
               onClick: function () {
                 props.save()
+                // The Host writes the value and reloads the entry, but the page
+                // keeps the config it booted with. Adopt the draft now so the
+                // badge and the chime follow the click instead of a refresh.
+                if (state.cfg) {
+                  state.cfg = Object.assign({}, state.cfg, {
+                    badgeColor: color,
+                    badgePosition: position,
+                    soundPreset: preset,
+                    volume: volume,
+                    minTurnDurationMs: Number(duration) || 0,
+                  })
+                  if (state.unread > 0) paint()
+                }
               },
               style: {
                 padding: '7px 18px',

@@ -21,6 +21,11 @@ export const name = 'dsh-badge'
  * Every default here is mirrored in client.js. The client reads the raw patch
  * config and applies its own fallbacks, because a client bundle can load
  * before the host ever validates the schema.
+ *
+ * Only `volatile()` fields reach the settings service: the Host serves a
+ * namespace for this entry only while at least one field is volatile, and the
+ * settings card binds to that namespace. The five fields the card edits are
+ * volatile; the rest stay ordinary configuration.
  */
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true)
@@ -31,21 +36,21 @@ export const Config = Schema.object({
     .description('Prefix the document title with "(N) " while there are unread turns.'),
   sound: Schema.boolean().default(true)
     .description('Play a chime when a turn finishes.'),
-  soundPreset: Schema.string().default('chime')
+  soundPreset: Schema.string().default('chime').volatile()
     .description('Built-in tone: "chime" (two-note bell) or "beep" (single square blip).'),
   soundUrl: Schema.string().default('')
     .description('Optional audio URL. When set, it replaces the built-in tone.'),
-  volume: Schema.number().default(0.5)
+  volume: Schema.number().default(0.5).volatile()
     .description('Chime volume, 0 to 1.'),
-  minTurnDurationMs: Schema.number().default(3000)
+  minTurnDurationMs: Schema.number().default(3000).volatile()
     .description('Ignore turns shorter than this, so quick replies stay silent.'),
   clearOnFocus: Schema.boolean().default(true)
     .description('Reset the unread count when the tab regains focus.'),
   errorSound: Schema.boolean().default(false)
     .description('Play a lower two-tone alert when a turn fails.'),
-  badgeColor: Schema.string().default('#f5455c')
+  badgeColor: Schema.string().default('#f5455c').volatile()
     .description('Hex colour of the badge disc, for example #f5455c.'),
-  badgePosition: Schema.string().default('br')
+  badgePosition: Schema.string().default('br').volatile()
     .description('Corner the badge sits in: "br" bottom-right, "tr" top-right.'),
   desktopBadge: Schema.boolean().default(true)
     .description('Windows only: paint the count on the app taskbar button through taskbar.ps1.'),
