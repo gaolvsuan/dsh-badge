@@ -387,6 +387,8 @@ window.__ModuleLoader__.load({
         presetBeep: '单声方波',
         presetRise: '三音上行',
         preview: '试听当前音色',
+        autoSaved: '已自动保存',
+        retrySave: '重试保存',
         discard: '取消修改',
         overridden: '已覆盖',
         reset: '恢复默认',
@@ -416,6 +418,8 @@ window.__ModuleLoader__.load({
         presetBeep: 'Square blip',
         presetRise: 'Three-note rise',
         preview: 'Preview current tone',
+        autoSaved: 'Saved automatically',
+        retrySave: 'Retry save',
         discard: 'Discard',
         overridden: 'Overridden',
         reset: 'Reset to default',
@@ -432,7 +436,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.5.2', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.6.0', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -600,9 +604,29 @@ window.__ModuleLoader__.load({
           var field = snapshot[name]
           return field && typeof field.text === 'string' ? field.text : ''
         }
+
+        // Changes take effect on the badge as they are made, and a short debounce
+        // writes them through, so there is no save button to remember.
+        var saveTimer = null
+        var applyLive = function (patch) {
+          if (!state.cfg) return
+          state.cfg = Object.assign({}, state.cfg, patch)
+          if (state.unread > 0) paint()
+        }
         var edit = function (name) {
           return function (value) {
             props.edit(name, String(value))
+            var patch = {}
+            if (name === 'volume') patch.volume = Number(value)
+            else if (name === 'minTurnDurationMs') patch.minTurnDurationMs = Number(value) || 0
+            else patch[name] = value
+            applyLive(patch)
+            if (saveTimer) clearTimeout(saveTimer)
+            saveTimer = setTimeout(function () {
+              try {
+                props.save()
+              } catch (error) {}
+            }, 450)
           }
         }
         var heading = function (name, key) {
@@ -782,55 +806,28 @@ window.__ModuleLoader__.load({
         var footer = jsxs('div', {
           style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 22 },
           children: [
-            jsx('button', {
-              type: 'button',
-              disabled: !writable || snapshot.saving === true,
-              onClick: function () {
-                props.save()
-                // The Host writes the value and reloads the entry, but the page
-                // keeps the config it booted with. Adopt the draft now so the
-                // badge and the chime follow the click instead of a refresh.
-                if (state.cfg) {
-                  state.cfg = Object.assign({}, state.cfg, {
-                    badgeColor: color,
-                    badgePosition: position,
-                    soundPreset: preset,
-                    volume: volume,
-                    minTurnDurationMs: Number(duration) || 0,
-                  })
-                  if (state.unread > 0) paint()
-                }
-              },
-              style: {
-                padding: '7px 18px',
-                borderRadius: 8,
-                font: 'inherit',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: writable ? 'pointer' : 'default',
-                color: '#fff',
-                background: color,
-                border: '1px solid ' + color,
-              },
-            }, snapshot.saving === true ? translate('saving') : translate('save')),
-            jsx('button', {
-              type: 'button',
-              disabled: !writable,
-              onClick: function () {
-                props.discard()
-              },
-              style: {
-                padding: '7px 14px',
-                borderRadius: 8,
-                font: 'inherit',
-                fontSize: 13,
-                color: 'inherit',
-                cursor: writable ? 'pointer' : 'default',
-                background: 'transparent',
-                border: '1px solid rgba(128,128,128,0.35)',
-              },
-            }, translate('discard')),
-            !writable ? jsx('span', { style: { fontSize: 12, opacity: 0.6 } }, translate('readOnly')) : null,
+            !writable
+              ? jsx('span', { style: { fontSize: 12, opacity: 0.6 } }, translate('readOnly'))
+              : jsx('span', { style: { fontSize: 12, opacity: 0.6 } },
+                snapshot.saving === true ? translate('saving') : translate('autoSaved')),
+            snapshot.saveFailed
+              ? jsx('button', {
+                type: 'button',
+                onClick: function () {
+                  props.save()
+                },
+                style: {
+                  padding: '5px 12px',
+                  borderRadius: 8,
+                  font: 'inherit',
+                  fontSize: 12,
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  border: '1px solid rgba(128,128,128,0.35)',
+                },
+              }, translate('retrySave'))
+              : null,
           ],
         })
 
