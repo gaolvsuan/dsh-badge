@@ -6,14 +6,16 @@
 # which is what this script does.
 #
 # Protocol: one command per line on stdin, one state line per command on stdout.
-#   add     increment the count and redraw the overlay
-#   tick    clear the overlay when the window has just come to the foreground
-#   clear   drop the count and remove the overlay
-#   quit    clear and exit
+#   add          increment the count and redraw the overlay
+#   tick         clear the overlay when the window has just come to the foreground
+#   clear        drop the count and remove the overlay
+#   color <hex>  change the disc colour and redraw a visible overlay
+#   quit         clear and exit
 # stdin closing also exits, so the helper dies with its host.
 
 param(
-    [string]$WindowMatch = 'DeepSeek Harness'
+    [string]$WindowMatch = 'DeepSeek Harness',
+    [string]$BadgeColor = '#f5455c'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +81,29 @@ $script:icon = [IntPtr]::Zero
 $script:wasForeground = $false
 $script:seenTick = $false
 
+# The disc colour comes from the plugin config; a malformed value falls back to
+# the red the badge ships with rather than failing the helper. Components are
+# returned rather than a Color struct: passing the struct through a function
+# return hands New-Object a string and the brush constructor rejects it.
+function Get-BadgeRgb([string]$hex) {
+    $clean = ($hex -replace '[^0-9a-fA-F]', '')
+    if ($clean.Length -eq 3) {
+        $clean = $clean[0].ToString() + $clean[0].ToString() + $clean[1].ToString() + $clean[1].ToString() + $clean[2].ToString() + $clean[2].ToString()
+    }
+    if ($clean.Length -ne 6) { return @(245, 69, 92) }
+    try {
+        return @(
+            [Convert]::ToInt32($clean.Substring(0, 2), 16),
+            [Convert]::ToInt32($clean.Substring(2, 2), 16),
+            [Convert]::ToInt32($clean.Substring(4, 2), 16)
+        )
+    } catch {
+        return @(245, 69, 92)
+    }
+}
+
+$script:badgeRgb = Get-BadgeRgb $BadgeColor
+
 function Find-TargetWindow {
     $process = Get-Process -Name $WindowMatch -ErrorAction SilentlyContinue |
         Where-Object { $_.MainWindowHandle -ne 0 } |
@@ -104,7 +129,7 @@ function New-BadgeIcon([int]$value) {
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.Clear([System.Drawing.Color]::Transparent)
 
-    $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 245, 69, 92))
+    $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, $script:badgeRgb[0], $script:badgeRgb[1], $script:badgeRgb[2]))
     $graphics.FillEllipse($brush, 0, 0, $size - 1, $size - 1)
 
     $font = New-Object System.Drawing.Font('Segoe UI', $(if ($text.Length -gt 1) { 13 } else { 16 }), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
@@ -176,7 +201,18 @@ while ($true) {
     $line = [Console]::In.ReadLine()
     if ($null -eq $line) { break }
 
-    switch ($line.Trim().ToLowerInvariant()) {
+    $command = $line.Trim()
+    $lower = $command.ToLowerInvariant()
+
+    if ($lower.StartsWith('color ')) {
+        $script:badgeRgb = Get-BadgeRgb $command.Substring(6)
+        if ($script:count -gt 0) { Publish -Value $script:count }
+        else { Write-Output 'state=color-only' }
+        [Console]::Out.Flush()
+        continue
+    }
+
+    switch ($lower) {
         'add' {
             $script:count++
             Publish -Value $script:count

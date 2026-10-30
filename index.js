@@ -71,6 +71,11 @@ function helperScript() {
   return fileURLToPath(new URL('./taskbar.ps1', import.meta.url))
 }
 
+function badgeColorOf(config) {
+  const value = String((config && config.badgeColor) || '')
+  return /^#[0-9a-f]{3,8}$/i.test(value) ? value : '#f5455c'
+}
+
 function startHelper(config) {
   const child = spawn(
     'powershell.exe',
@@ -80,6 +85,7 @@ function startHelper(config) {
       '-ExecutionPolicy', 'Bypass',
       '-File', helperScript(),
       '-WindowMatch', config.desktopBadgeWindow || 'DeepSeek Harness',
+      '-BadgeColor', badgeColorOf(config),
     ],
     { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true },
   )
@@ -147,6 +153,16 @@ function watchTurnsForTaskbar(ctx, config) {
   // The helper is spawned lazily on the first turn event, so the config has to
   // be visible to send() before that happens.
   helperConfig = config
+
+  // A settings write reloads this entry, so a live helper has to be told about
+  // the new colour instead of waiting for the next turn.
+  if (helper) {
+    try {
+      helper.stdin.write('color ' + badgeColorOf(config) + '\n')
+    } catch {
+      // A dead helper is replaced on the next send.
+    }
+  }
 
   const startedAt = new Map()
   const minDuration = typeof config.minTurnDurationMs === 'number' ? config.minTurnDurationMs : 3000

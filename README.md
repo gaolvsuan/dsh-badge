@@ -135,11 +135,12 @@ chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
 Electron 的 `setOverlayIcon` 在这里用不了：插件跑在 DSH 的宿主进程里，带任务栏按钮的窗口属于另一个进程。Windows 允许任何进程通过 `ITaskbarList3` 给指定 HWND 画覆盖图标，所以宿主侧会拉起 `taskbar.ps1`，用管道喂它事件：
 
 ```
-宿主 index.js ──stdin: add / tick / quit──▶ taskbar.ps1 ──ITaskbarList3──▶ 任务栏按钮
+宿主 index.js ──stdin: add / tick / color / quit──▶ taskbar.ps1 ──ITaskbarList3──▶ 任务栏按钮
 ```
 
 - 助手自己维护计数、画图标、判断前台窗口，`add` 加一，`tick` 检查窗口是否刚切回前台并清除
-- 图标用 `System.Drawing` 现画：32×32 红底白字，超过 99 显示 `99`
+- 图标用 `System.Drawing` 现画：32×32 圆底白字，超过 99 显示 `99`
+- 颜色跟随 `badgeColor`：启动时用 `-BadgeColor` 传进去，改设置时宿主通过 `color #rrggbb` 让助手立刻重画
 - 宿主退出时管道关闭，助手随之退出并清掉角标，不留残留
 
 不想装进 profile 也能单独看效果：
