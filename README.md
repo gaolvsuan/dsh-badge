@@ -40,7 +40,7 @@
 ```jsonc
 {
   "dependencies": {
-    "dsh-badge": "file:E:/AI工作站/deepseek插件编写"
+    "dsh-badge": "file:../dsh-badge"
   },
   "dsh": {
     "profile": {
