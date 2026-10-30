@@ -11,11 +11,14 @@
 #   clear        drop the count and remove the overlay
 #   color <hex>  change the disc colour and redraw a visible overlay
 #   quit         clear and exit
-# stdin closing also exits, so the helper dies with its host.
+# stdin closing also exits, so the helper dies with its host. A restarted host
+# cannot adopt an older helper, and an orphan would keep painting the colour it
+# started with, so -ParentPid lets the helper notice the host is gone and quit.
 
 param(
     [string]$WindowMatch = 'DeepSeek Harness',
-    [string]$BadgeColor = '#f5455c'
+    [string]$BadgeColor = '#f5455c',
+    [int]$ParentPid = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,6 +106,11 @@ function Get-BadgeRgb([string]$hex) {
 }
 
 $script:badgeRgb = Get-BadgeRgb $BadgeColor
+
+function Test-ParentAlive {
+    if ($ParentPid -le 0) { return $true }
+    return $null -ne (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)
+}
 
 function Find-TargetWindow {
     $process = Get-Process -Name $WindowMatch -ErrorAction SilentlyContinue |
@@ -200,6 +208,13 @@ Write-Output "state=ready pid=$PID"
 while ($true) {
     $line = [Console]::In.ReadLine()
     if ($null -eq $line) { break }
+
+    if (-not (Test-ParentAlive)) {
+        $script:count = 0
+        Publish -Value 0
+        Write-Output 'state=parent-gone'
+        exit 0
+    }
 
     $command = $line.Trim()
     $lower = $command.ToLowerInvariant()

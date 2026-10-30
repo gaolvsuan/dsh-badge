@@ -86,6 +86,7 @@ function startHelper(config) {
       '-File', helperScript(),
       '-WindowMatch', config.desktopBadgeWindow || 'DeepSeek Harness',
       '-BadgeColor', badgeColorOf(config),
+      '-ParentPid', String(process.pid),
     ],
     { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true },
   )
