@@ -8,3 +8,5 @@ coverage/
 _audit-dump.txt
 _*.png
 _*.txt
+__pycache__/
+*.pyc
