@@ -252,6 +252,15 @@ def fluke_badge_icon(size, fluke="#3b82f6", badge="#f5455c", text="1"):
     reads as one mark rather than a logo with a sticker on it.
     """
     image = rounded_tile(size, int(size * 0.22), "#ffffff")
+    # A white tile on a white page has no edge at all, so the outline is drawn
+    # rather than left to the background.
+    outline_width = max(1, round(size / 256))
+    ImageDraw.Draw(image).rounded_rectangle(
+        [0, 0, size - 1, size - 1],
+        radius=int(size * 0.22),
+        outline="#e5e7eb",
+        width=outline_width,
+    )
 
     mask = fluke_mask(size)
     if mask is None:
