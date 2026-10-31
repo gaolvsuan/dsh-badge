@@ -131,7 +131,7 @@ chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
 What it looks like in the taskbar:
 
 <p align="center">
-  <img src="docs/taskbar-badge.png" width="71" alt="Numeric badge on the Windows taskbar icon">
+  <img src="docs/taskbar-badge-colors.png" width="200" alt="The taskbar badge in two of its colours, red and purple">
 </p>
 
 Electron's `setOverlayIcon` is out of reach here: the plugin runs in the DSH host process while the window that owns the taskbar button belongs to another one. Windows lets any process paint that overlay through `ITaskbarList3` given the HWND, so the host spawns `taskbar.ps1` and feeds it events over a pipe:

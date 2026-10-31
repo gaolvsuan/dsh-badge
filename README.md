@@ -131,7 +131,7 @@ chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
 实际效果（任务栏截图）：
 
 <p align="center">
-  <img src="docs/taskbar-badge.png" width="71" alt="Windows 任务栏图标上的数字角标">
+  <img src="docs/taskbar-badge-colors.png" width="200" alt="任务栏角标的两种颜色：红色和紫色">
 </p>
 
 Electron 的 `setOverlayIcon` 在这里用不了：插件跑在 DSH 的宿主进程里，带任务栏按钮的窗口属于另一个进程。Windows 允许任何进程通过 `ITaskbarList3` 给指定 HWND 画覆盖图标，所以宿主侧会拉起 `taskbar.ps1`，用管道喂它事件：
