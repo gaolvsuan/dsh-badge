@@ -1,5 +1,7 @@
 # dsh-badge
 
+中文 | [English](README.en.md)
+
 和 ChatGPT 标签页右上角那个红色数字角标同一个东西，搬到 DeepSeek Harness：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数，并播放提示音。
 
 <p align="center">
@@ -8,10 +10,10 @@
 
 ## 效果
 
-- 标签页图标右下角出现红色角标，显示未读回合数（超过 99 显示 `99+`）
+- 标签页图标上出现角标，显示未读回合数（超过 99 显示 `99+`）
 - 标题变成 `(3) DeepSeek Harness`
-- Windows 上任务栏按钮同样挂上红色数字角标，窗口切回前台后清除
-- 回合结束播放两音铃声，错误回合可另配低音提示
+- Windows 上任务栏按钮同样挂上数字角标，窗口切回前台后清除
+- 回合结束播放提示音，三种音色可选，错误回合可另配低音提示
 - 标签页重新可见约 1.2 秒后自动清零
 
 音效由 Web Audio 现场合成，插件不带任何音频文件；角标画在 canvas 上再替换 `<link rel="icon">`，站点原图标保留为底图。
@@ -23,7 +25,7 @@
 | 系统通知 / webhook | ✅ | ❌ |
 | 图标数字角标 | ❌ | ✅ |
 | 标题计数前缀 | ❌ | ✅ |
-| 提示音 | 跟随系统默认 | 可关闭、可调音量、可换自定义音频 |
+| 提示音 | 跟随系统默认 | 可关闭、可调音量、三种音色 |
 
 两者可以同时装，互不冲突。
 
@@ -84,7 +86,7 @@ dsh plugin --profile desktop add dsh-badge
 | `sound` | `true` | 是否播放提示音 |
 | `soundPreset` | `chime` | `chime` 两音铃声，`beep` 单声方波，`rise` 三音上行 |
 | `soundUrl` | `''` | 自定义音频地址，设置后替代内置音 |
-| `volume` | `0.5` | 音量，0 到 1 |
+| `volume` | `0.5` | 音量，0 到 1，走幂曲线而非线性 |
 | `minTurnDurationMs` | `3000` | 短于该时长的回合不计角标、不响 |
 | `clearOnFocus` | `true` | 标签页重新可见时清零 |
 | `badgeColor` | `#f5455c` | 角标圆点颜色，十六进制 |
@@ -99,26 +101,31 @@ dsh plugin --profile desktop add dsh-badge
 
 设置 → **插件管理** → 打开 `dsh-badge` 这个组合包，配置表单就在页面里：
 
-- **颜色**：六个预设色块，外加一个取色器，改完保存按钮也跟着变色
+- **颜色**：六个预设色块，外加一个取色器
 - **位置**：右下角 / 右上角二选一
-- **提示音**：两音铃声 / 单声方波，旁边有「试听」按钮，用当前音量和音色当场响一声
+- **提示音**：两音铃声 / 单声方波 / 三音上行，点哪个当场响哪个，旁边还有「试听当前音色」
 - **音量**：0–100% 滑杆
 - **最短回合时长**：数字输入
 
-改完点保存写入 Host 设置文档，取消则丢弃草稿。
+改完立刻生效，停手后自动写入 Host 设置文档，没有保存按钮。底部只显示「已自动保存」或「保存中…」，写入失败时出现「重试保存」。
 
 实现上，表单注册进 `plugins.bundle.config` 槽，键是包名 `dsh-badge`。社区组合包不能用 `plugins.item`，那个槽只列官方插件。表单只在 Host 提供对应设置命名空间时才注册，所以没装这个插件的部署看不到它。
 
 控件是自己画的：DSH 共享的 `SettingsValueField` 只渲染文本框，没有开关、下拉和取色器，所以这里保留 `SettingsFormModel` 负责暂存与提交，界面用原生控件自己拼。布尔类配置仍走配置文件。
+
+可编辑字段声明为 `volatile()`：Host 只为含 volatile 字段的条目提供设置命名空间。这类字段在宿主侧是带 `get()` 的引用对象，且不会序列化进浏览器 bundle，所以客户端从 settings scope 的 `getSnapshot().value` 读实时值并订阅后续变化。
 
 ## 手动验证
 
 浏览器开发者工具控制台里：
 
 ```js
-__DSH_BADGE__.test(3)   // 角标显示 3 并响一声
-__DSH_BADGE__.clear()   // 清零
-__DSH_BADGE__.sound()   // 只试听音效
+__DSH_BADGE__.test(3)          // 角标显示 3 并响一声
+__DSH_BADGE__.clear()          // 清零
+__DSH_BADGE__.sound()          // 只试听音效
+__DSH_BADGE__.config           // 当前生效的配置
+__DSH_BADGE__.lastChime()      // 上一声用的音量、音色和增益
+__DSH_BADGE__.diag             // 设置表单的注册状态
 ```
 
 `demo/index.html` 是一个独立演示页，直接双击打开即可。它加载仓库里真实的 `client.js`，只把 DSH 的 sessions 服务换成假数据，用来单独验证角标和音效。
@@ -140,8 +147,9 @@ Electron 的 `setOverlayIcon` 在这里用不了：插件跑在 DSH 的宿主进
 
 - 助手自己维护计数、画图标、判断前台窗口，`add` 加一，`tick` 检查窗口是否刚切回前台并清除
 - 图标用 `System.Drawing` 现画：32×32 圆底白字，超过 99 显示 `99`
-- 颜色跟随 `badgeColor`：启动时用 `-BadgeColor` 传进去，改设置时宿主通过 `color #rrggbb` 让助手立刻重画
-- 宿主退出时管道关闭，助手随之退出并清掉角标，不留残留
+- 颜色跟随 `badgeColor`：启动时用 `-BadgeColor` 传进去，改设置时宿主每 800 毫秒读一次 volatile 引用，发现变了就发 `color #rrggbb` 让助手立刻重画，不需要重启
+- 子代理的回合不计入任务栏角标，和标签页保持一致
+- 助手带 `-ParentPid` 启动，父进程消失后自行退出并清掉角标，不留孤儿
 
 不想装进 profile 也能单独看效果：
 
@@ -161,6 +169,8 @@ npm test        # 单元测试（node --test，用 DOM 桩驱动真实 client.js
 仓库没有构建步骤：`client.js` 手写成 `window.__ModuleLoader__.load({ id, factory })` 要求的形状，改完直接生效。
 
 把仓库以目录链接的方式装进 profile 时，Node 会按仓库真实路径解析依赖，`@deepseek-ai/schemastery` 会找不到。在仓库里建一个 `node_modules/@deepseek-ai/schemastery` 指向 profile 中的同名包即可（`node_modules/` 已加入 `.gitignore`）。
+
+Windows 上用 PowerShell 读写含中文的文件要注意编码：`Get-Content` 对无 BOM 的 UTF-8 文件按本地代码页解码，会把中文写坏。改这类文件请用编辑器。
 
 ## 已知限制
 
