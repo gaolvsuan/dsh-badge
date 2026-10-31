@@ -5,7 +5,7 @@
 和 ChatGPT 标签页右上角那个红色数字角标同一个东西，搬到 DeepSeek Harness：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数，并播放提示音。
 
 <p align="center">
-  <img src="docs/taskbar-badge.png" width="71" alt="Windows 任务栏图标右上角的红色数字角标">
+  <img src="assets/icon-app-256.png" width="128" alt="DeepSeek Harness 图标右上角的紫色数字角标">
 </p>
 
 ## 效果
@@ -138,6 +138,12 @@ chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
 ```
 
 ## 桌面端任务栏角标
+
+实际效果（任务栏截图）：
+
+<p align="center">
+  <img src="docs/taskbar-badge.png" width="71" alt="Windows 任务栏图标上的数字角标">
+</p>
 
 Electron 的 `setOverlayIcon` 在这里用不了：插件跑在 DSH 的宿主进程里，带任务栏按钮的窗口属于另一个进程。Windows 允许任何进程通过 `ITaskbarList3` 给指定 HWND 画覆盖图标，所以宿主侧会拉起 `taskbar.ps1`，用管道喂它事件：
 

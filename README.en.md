@@ -5,7 +5,7 @@ English | [中文](README.md)
 The same red corner badge ChatGPT puts on its tab, for DeepSeek Harness: the unread count on the tab icon and the Windows taskbar button, plus a chime when a turn finishes.
 
 <p align="center">
-  <img src="docs/taskbar-badge.png" width="71" alt="Red numeric badge on the Windows taskbar icon">
+  <img src="assets/icon-app-256.png" width="128" alt="Purple numeric badge on the DeepSeek Harness icon">
 </p>
 
 ## What it does
@@ -138,6 +138,12 @@ chrome --headless=new --disable-gpu --virtual-time-budget=4000 \
 ```
 
 ## The taskbar badge
+
+What it looks like in the taskbar:
+
+<p align="center">
+  <img src="docs/taskbar-badge.png" width="71" alt="Numeric badge on the Windows taskbar icon">
+</p>
 
 Electron's `setOverlayIcon` is out of reach here: the plugin runs in the DSH host process while the window that owns the taskbar button belongs to another one. Windows lets any process paint that overlay through `ITaskbarList3` given the HWND, so the host spawns `taskbar.ps1` and feeds it events over a pipe:
 
