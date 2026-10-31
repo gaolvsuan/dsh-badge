@@ -18,17 +18,6 @@ The same red corner badge ChatGPT puts on its tab, for DeepSeek Harness: the unr
 
 The tone is synthesised with Web Audio, so the plugin ships no audio files. The badge is drawn on a canvas and swapped into `<link rel="icon">`, keeping the site's own icon underneath.
 
-## Compared with dsh-notification
-
-| Capability | dsh-notification | dsh-badge |
-| --- | --- | --- |
-| Desktop notifications / webhook | ✅ | ❌ |
-| Numeric icon badge | ❌ | ✅ |
-| Count prefix in the title | ❌ | ✅ |
-| Chime | system default | can be disabled, has a volume, three tones |
-
-Both can be installed together without conflict.
-
 ## Install
 
 ### From the plugin market
