@@ -15,6 +15,7 @@ The app-icon family needs the DSH icon. It is read from the installed
 application; nothing else in the repository depends on it.
 """
 
+import math
 import os
 from PIL import Image, ImageDraw, ImageFont
 
@@ -236,6 +237,67 @@ def app_corner_icon(size, color, corners=("tl",), text="1"):
     return image
 
 
+def ellipse_points(cx, cy, rx, ry, angle_deg, steps=64):
+    """Points around a rotated ellipse, for polygon drawing."""
+    angle = math.radians(angle_deg)
+    points = []
+    for step in range(steps):
+        theta = 2 * math.pi * step / steps
+        x = rx * math.cos(theta)
+        y = ry * math.sin(theta)
+        points.append(
+            (
+                cx + x * math.cos(angle) - y * math.sin(angle),
+                cy + x * math.sin(angle) + y * math.cos(angle),
+            )
+        )
+    return points
+
+
+def whale_tail_icon(size, color, text="1"):
+    """A whale fluke with the count pinned to it.
+
+    Two swept lobes over a short stem: a generic whale shape that carries no
+    third-party mark, and a disc that keeps the same badge language as the tab
+    and the taskbar.
+    """
+    image = rounded_tile(size, int(size * 0.22), color)
+    tail = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    tail_draw = ImageDraw.Draw(tail)
+
+    left = ellipse_points(size * 0.31, size * 0.40, size * 0.27, size * 0.072, -52)
+    right = ellipse_points(size * 0.59, size * 0.40, size * 0.27, size * 0.072, 52)
+    tail_draw.polygon(left, fill="#ffffff")
+    tail_draw.polygon(right, fill="#ffffff")
+
+    stem = [
+        (size * 0.41, size * 0.46),
+        (size * 0.49, size * 0.46),
+        (size * 0.47, size * 0.88),
+        (size * 0.43, size * 0.88),
+    ]
+    tail_draw.polygon(stem, fill="#ffffff")
+    image.alpha_composite(tail)
+
+    badge_radius = int(size * 0.19)
+    cx = size - badge_radius - int(size * 0.02)
+    cy = badge_radius + int(size * 0.02)
+
+    disc = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    disc_draw = ImageDraw.Draw(disc)
+    disc_draw.ellipse(
+        [cx - badge_radius, cy - badge_radius, cx + badge_radius, cy + badge_radius],
+        fill=color,
+        outline="#ffffff",
+        width=max(3, int(size * 0.022)),
+    )
+    image.alpha_composite(disc)
+
+    font = load_font(int(badge_radius * 1.05))
+    ImageDraw.Draw(image).text((cx, cy), text, font=font, fill="#ffffff", anchor="mm")
+    return image
+
+
 def bubble_icon(size, color, text="1", tail="bl"):
     """A notification bubble: a rounded tile with a tail, and the count inside.
 
@@ -338,6 +400,12 @@ def main():
             save(bubble_icon(size, COLORS["purple"], tail=tail), f"icon-bubble-{tail}-{size}.png")
     for color_name in ("red", "blue", "green"):
         save(bubble_icon(512, COLORS[color_name], tail="bl"), f"icon-bubble-{color_name}-512.png")
+
+    # A whale fluke with the count pinned on it.
+    for size in (512, 256, 180):
+        save(whale_tail_icon(size, COLORS["purple"]), f"icon-whale-{size}.png")
+    for color_name in ("red", "blue", "green"):
+        save(whale_tail_icon(512, COLORS[color_name]), f"icon-whale-{color_name}-512.png")
 
 
 if __name__ == "__main__":
