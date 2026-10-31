@@ -245,6 +245,50 @@ def fluke_mask(size):
     return Image.open(path).convert("L").resize((size, size), Image.LANCZOS)
 
 
+def fluke_badge_icon(size, fluke="#3b82f6", badge="#f5455c", text="1"):
+    """A blue fluke on a white tile with a red count at its top-right.
+
+    The fluke is centred; the badge hangs off its upper-right corner so the pair
+    reads as one mark rather than a logo with a sticker on it.
+    """
+    image = rounded_tile(size, int(size * 0.22), "#ffffff")
+
+    mask = fluke_mask(size)
+    if mask is None:
+        return image
+
+    inner = int(size * 0.58)
+    # Shift the fluke left so the fluke-plus-badge pair, not the fluke alone,
+    # sits in the middle of the tile.
+    left = (size - inner) // 2 - int(size * 0.035)
+    top = (size - inner) // 2
+    shape = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    shape.paste(
+        Image.new("RGBA", (inner, inner), fluke),
+        (left, top),
+        mask.resize((inner, inner), Image.LANCZOS),
+    )
+    image.alpha_composite(shape)
+
+    badge_radius = int(size * 0.15)
+    cx = left + inner - int(size * 0.04)
+    cy = top + int(size * 0.08)
+
+    disc = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    disc_draw = ImageDraw.Draw(disc)
+    disc_draw.ellipse(
+        [cx - badge_radius, cy - badge_radius, cx + badge_radius, cy + badge_radius],
+        fill=badge,
+        outline="#ffffff",
+        width=max(3, int(size * 0.018)),
+    )
+    image.alpha_composite(disc)
+
+    font = load_font(int(badge_radius * 1.05))
+    ImageDraw.Draw(image).text((cx, cy), text, font=font, fill="#ffffff", anchor="mm")
+    return image
+
+
 def fluke_icon(size, color, text="1"):
     """The traced fluke on a tile, with the count pinned to its corner."""
     image = rounded_tile(size, int(size * 0.22), color)
@@ -457,6 +501,10 @@ def main():
         save(fluke_icon(size, COLORS["purple"]), f"icon-fluke-{size}.png")
     for color_name in ("red", "blue", "green"):
         save(fluke_icon(512, COLORS[color_name]), f"icon-fluke-{color_name}-512.png")
+
+    # Blue fluke on white, red count on its corner.
+    for size in (512, 256, 180):
+        save(fluke_badge_icon(size), f"icon-fluke-white-{size}.png")
 
 
 if __name__ == "__main__":
