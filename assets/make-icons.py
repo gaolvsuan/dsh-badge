@@ -237,6 +237,51 @@ def app_corner_icon(size, color, corners=("tl",), text="1"):
     return image
 
 
+def fluke_mask(size):
+    """The traced fluke, scaled to the requested size."""
+    path = os.path.join(HERE, "source", "fluke-mask.png")
+    if not os.path.exists(path):
+        return None
+    return Image.open(path).convert("L").resize((size, size), Image.LANCZOS)
+
+
+def fluke_icon(size, color, text="1"):
+    """The traced fluke on a tile, with the count pinned to its corner."""
+    image = rounded_tile(size, int(size * 0.22), color)
+
+    mask = fluke_mask(size)
+    if mask is not None:
+        inner = int(size * 0.64)
+        left = int(size * 0.06)
+        top = int(size * 0.30)
+        shape = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        shape.paste(
+            Image.new("RGBA", (inner, inner), "#ffffff"),
+            (left, top),
+            mask.resize((inner, inner), Image.LANCZOS),
+        )
+        image.alpha_composite(shape)
+
+    badge_radius = int(size * 0.21)
+    gap = int(size * 0.02)
+    cx = size - badge_radius - gap
+    cy = badge_radius + gap
+
+    disc = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    disc_draw = ImageDraw.Draw(disc)
+    disc_draw.ellipse(
+        [cx - badge_radius, cy - badge_radius, cx + badge_radius, cy + badge_radius],
+        fill=color,
+        outline="#ffffff",
+        width=max(3, int(size * 0.02)),
+    )
+    image.alpha_composite(disc)
+
+    font = load_font(int(badge_radius * 1.05))
+    ImageDraw.Draw(image).text((cx, cy), text, font=font, fill="#ffffff", anchor="mm")
+    return image
+
+
 def ellipse_points(cx, cy, rx, ry, angle_deg, steps=64):
     """Points around a rotated ellipse, for polygon drawing."""
     angle = math.radians(angle_deg)
@@ -406,6 +451,12 @@ def main():
         save(whale_tail_icon(size, COLORS["purple"]), f"icon-whale-{size}.png")
     for color_name in ("red", "blue", "green"):
         save(whale_tail_icon(512, COLORS[color_name]), f"icon-whale-{color_name}-512.png")
+
+    # The traced fluke: the shape the author picked, at every size.
+    for size in (512, 256, 180):
+        save(fluke_icon(size, COLORS["purple"]), f"icon-fluke-{size}.png")
+    for color_name in ("red", "blue", "green"):
+        save(fluke_icon(512, COLORS[color_name]), f"icon-fluke-{color_name}-512.png")
 
 
 if __name__ == "__main__":
