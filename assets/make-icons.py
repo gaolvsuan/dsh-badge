@@ -236,6 +236,54 @@ def app_corner_icon(size, color, corners=("tl",), text="1"):
     return image
 
 
+def bubble_icon(size, color, text="1", tail="bl"):
+    """A notification bubble: a rounded tile with a tail, and the count inside.
+
+    The tail is what makes it read as a notification rather than a plain app
+    tile, and it borrows nobody's mark.
+    """
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    # A left-pointing tail needs room outside the body, so the body shifts right.
+    inset = int(size * 0.16) if tail == "left" else 0
+    body_height = int(size * 0.78)
+    radius = int(size * 0.24)
+    draw.rounded_rectangle([inset, 0, size - 1, body_height], radius=radius, fill=color)
+
+    if tail == "bl":
+        draw.polygon(
+            [
+                (int(size * 0.20), body_height - int(size * 0.02)),
+                (int(size * 0.46), body_height - int(size * 0.02)),
+                (int(size * 0.10), size - 1),
+            ],
+            fill=color,
+        )
+    elif tail == "br":
+        draw.polygon(
+            [
+                (size - int(size * 0.20), body_height - int(size * 0.02)),
+                (size - int(size * 0.46), body_height - int(size * 0.02)),
+                (size - int(size * 0.10), size - 1),
+            ],
+            fill=color,
+        )
+    elif tail == "left":
+        draw.polygon(
+            [
+                (inset + 2, int(size * 0.26)),
+                (inset + 2, int(size * 0.54)),
+                (0, int(size * 0.40)),
+            ],
+            fill=color,
+        )
+
+    font = load_font(int(size * 0.44))
+    draw.text(((size + inset) / 2, body_height / 2), text, font=font, fill="#ffffff", anchor="mm")
+    return image
+
+
 def save(image, name):
     if image is None:
         print(f"{name}\tskipped, no app icon found")
@@ -283,6 +331,13 @@ def main():
     for name, corners in corner_variants.items():
         for size in (512, 180):
             save(app_corner_icon(size, COLORS["purple"], corners), f"icon-quarter-app-{name}-{size}.png")
+
+    # Notification bubbles: no third-party mark, the tail carries the meaning.
+    for tail in ("bl", "br", "left"):
+        for size in (512, 180):
+            save(bubble_icon(size, COLORS["purple"], tail=tail), f"icon-bubble-{tail}-{size}.png")
+    for color_name in ("red", "blue", "green"):
+        save(bubble_icon(512, COLORS[color_name], tail="bl"), f"icon-bubble-{color_name}-512.png")
 
 
 if __name__ == "__main__":
