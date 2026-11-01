@@ -47,6 +47,52 @@ def rounded_tile(size, radius, fill):
     return image
 
 
+APP_ICON_CANDIDATES = [
+    r"C:\Users\yct\AppData\Local\Programs\DeepSeek Harness\resources\icon.png",
+    os.path.join(HERE, "source", "dsh-icon.png"),
+]
+
+
+def load_app_icon():
+    for path in APP_ICON_CANDIDATES:
+        if os.path.exists(path):
+            return Image.open(path).convert("RGBA")
+    return None
+
+
+def app_icon(size, color, text="1"):
+    """The DeepSeek Harness mark with the badge over its top-right corner.
+
+    This one carries the host's own logo, so it is kept as an alternative for
+    people who want the storefront tile to look exactly like the taskbar.
+    """
+    source = load_app_icon()
+    if source is None:
+        return None
+
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    image.alpha_composite(source.resize((size, size), Image.LANCZOS))
+
+    radius = int(size * 0.26)
+    gap = int(size * 0.015)
+    cx = size - radius - gap
+    cy = radius + gap
+
+    disc = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    disc_draw = ImageDraw.Draw(disc)
+    disc_draw.ellipse(
+        [cx - radius, cy - radius, cx + radius, cy + radius],
+        fill=color,
+        outline="#ffffff",
+        width=max(3, int(size * 0.022)),
+    )
+    image.alpha_composite(disc)
+
+    font = load_font(int(radius * 1.05))
+    ImageDraw.Draw(image).text((cx, cy), text, font=font, fill="#ffffff", anchor="mm")
+    return image
+
+
 def fluke_mask(size):
     path = os.path.join(HERE, "source", "fluke-mask.png")
     if not os.path.exists(path):
@@ -116,12 +162,14 @@ def main():
     for color_name, hex_value in COLORS.items():
         save(fluke_icon(MAIN, hex_value), f"icon-fluke-{color_name}-{MAIN}.png")
         save(dot_icon(MAIN, hex_value), f"icon-dot-{color_name}-{MAIN}.png")
+        save(app_icon(MAIN, hex_value), f"icon-app-{color_name}-{MAIN}.png")
 
     # The files the README, the screenshots list and the market entry point at.
     save(fluke_icon(MAIN, COLORS["purple"]), "icon-fluke-512.png")
     save(fluke_icon(180, COLORS["purple"]), "icon-fluke-180.png")
     save(dot_icon(MAIN, COLORS["red"]), "icon-dot-512.png")
     save(dot_icon(180, COLORS["red"]), "icon-dot-180.png")
+    save(app_icon(180, COLORS["purple"]), "icon-app-180.png")
 
 
 if __name__ == "__main__":
