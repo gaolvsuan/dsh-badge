@@ -345,7 +345,10 @@ window.__ModuleLoader__.load({
           var id = nextIds[j]
           var item = next.byId[id]
           if (!item) continue
-          if (item.origin === 'subagent') continue
+          // A child session is not a turn the user started: subagents carry
+          // origin "subagent", and an Agent Team teammate carries a parent id
+          // instead. Either way it must not raise the count.
+          if (item.origin === 'subagent' || item.parentId) continue
 
           var seen = prev.get(id)
           if (!seen) {
@@ -459,7 +462,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.2', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.8.3', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context

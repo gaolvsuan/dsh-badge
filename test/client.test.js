@@ -128,6 +128,7 @@ function createSessions() {
   const rows = {
     'session-a': { id: 'session-a', title: '主会话', running: false, pendingInteraction: undefined, origin: 'user' },
     'session-sub': { id: 'session-sub', title: '子代理', running: false, pendingInteraction: undefined, origin: 'subagent' },
+    'session-team': { id: 'session-team', title: 'teammate', running: false, pendingInteraction: undefined, parentId: 'session-a' },
   }
   const ids = Object.keys(rows)
   let subscribers = []
@@ -224,6 +225,18 @@ test('subagent sessions never raise the badge', async () => {
 
   sessions.update('session-sub', { running: true })
   sessions.update('session-sub', { running: false })
+
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 0)
+})
+
+test('an Agent Team teammate never raises the badge', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+  mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
+
+  // No origin, only a parent id: a teammate finishing is not the user's turn.
+  sessions.update('session-team', { running: true })
+  sessions.update('session-team', { running: false })
 
   assert.equal(env.window.__DSH_BADGE__.getCount(), 0)
 })

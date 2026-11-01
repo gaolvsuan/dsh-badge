@@ -133,6 +133,8 @@ test('subagent turns never raise the taskbar badge', { skip: process.platform !=
 
   const ctx = createCtx()
   const subagent = { session: { header: { origin: 'subagent' } } }
+  // An Agent Team teammate has a parent session and no origin.
+  const teammate = { session: { header: { parentSessionId: 'session-parent' } } }
 
   mod.apply(ctx, {
     minTurnDurationMs: 0,
@@ -143,9 +145,11 @@ test('subagent turns never raise the taskbar badge', { skip: process.platform !=
   try {
     ctx.emit('agent/status', { agent: subagent, status: 'running' })
     ctx.emit('agent/status', { agent: subagent, status: 'idle' })
+    ctx.emit('agent/status', { agent: teammate, status: 'running' })
+    ctx.emit('agent/status', { agent: teammate, status: 'idle' })
 
     await new Promise((resolve) => setTimeout(resolve, 2500))
-    assert.ok(!readLog(logPath).includes('state=shown'), 'a subagent turn must not paint a badge')
+    assert.ok(!readLog(logPath).includes('state=shown'), 'a child turn must not paint a badge')
   } finally {
     ctx.dispose()
     fs.rmSync(logPath, { force: true })

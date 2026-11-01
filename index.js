@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs'
+﻿import { appendFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
@@ -94,11 +94,17 @@ function badgeColorOf(config) {
   return /^#[0-9a-f]{3,8}$/i.test(value) ? value : '#f5455c'
 }
 
-// The browser half skips rows whose origin is "subagent"; the host sees the
-// same fact on the agent's session header.
-function isSubagent(agent) {
+// The browser half skips child sessions; the host sees the same fact on the
+// agent's session header. Subagents carry origin "subagent", while an Agent
+// Team teammate carries a parent session id and no origin, so both are checked.
+function isChildAgent(agent) {
   try {
-    return Boolean(agent && agent.session && agent.session.header && agent.session.header.origin === 'subagent')
+    const header = agent && agent.session && agent.session.header
+    if (!header) return false
+    if (header.origin === 'subagent') return true
+    if (header.parentSessionId) return true
+    if (header.parentId) return true
+    return false
   } catch {
     return false
   }
@@ -128,7 +134,7 @@ function startHelper(config) {
   }
 
   // Drain stdout: an unread pipe would eventually block the helper. With a
-  // debug log configured, keep the state lines — they are the only evidence
+  // debug log configured, keep the state lines 鈥?they are the only evidence
   // that the overlay was actually painted.
   child.stdout.on('data', (chunk) => {
     if (!config.debugLog) return
@@ -209,7 +215,7 @@ function watchTurnsForTaskbar(ctx, config) {
     // A subagent's turn is internal work the user never sees as a session, and
     // the browser half already skips those rows. Counting them here made the
     // taskbar number run ahead of the tab number.
-    if (isSubagent(agent)) return
+    if (isChildAgent(agent)) return
     if (status === 'running') {
       startedAt.set(agent, Date.now())
       return
@@ -222,7 +228,7 @@ function watchTurnsForTaskbar(ctx, config) {
   })
 
   ctx.on('agent/error', ({ agent } = {}) => {
-    if (isSubagent(agent)) return
+    if (isChildAgent(agent)) return
     send('add')
   })
 
