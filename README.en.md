@@ -5,7 +5,7 @@ English | [中文](README.md)
 The same red corner badge ChatGPT puts on its tab, for DeepSeek Harness: the unread count on the tab icon and the Windows taskbar button, plus a chime when a turn finishes.
 
 <p align="center">
-  <img src="assets/icon-app-256.png" width="128" alt="A numeric badge on the DeepSeek Harness icon">
+  <img src="assets/icon-dot-512.png" width="128" alt="A red disc carrying the unread count">
 </p>
 
 ## What it does

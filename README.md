@@ -5,7 +5,7 @@
 和 ChatGPT 标签页右上角那个红色数字角标同一个东西，搬到 DeepSeek Harness：回合结束时在标签页图标和 Windows 任务栏图标上叠加未读数，并播放提示音。
 
 <p align="center">
-  <img src="assets/icon-app-256.png" width="128" alt="DeepSeek Harness 图标右上角的数字角标">
+  <img src="assets/icon-dot-512.png" width="128" alt="红色圆形角标，里面是未读数">
 </p>
 
 ## 效果
