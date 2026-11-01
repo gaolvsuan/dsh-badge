@@ -1,4 +1,4 @@
-﻿import { appendFileSync } from 'node:fs'
+import { appendFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import Schema from '@deepseek-ai/schemastery'
@@ -95,15 +95,19 @@ function badgeColorOf(config) {
 }
 
 // The browser half skips child sessions; the host sees the same fact on the
-// agent's session header. Subagents carry origin "subagent", while an Agent
-// Team teammate carries a parent session id and no origin, so both are checked.
+// agent's session header. A subagent carries origin "subagent", and any child
+// session — an Agent Team teammate included — carries `parentSession` and a
+// delegation depth above zero. The header uses those names, not the summary's
+// `parentSessionId`.
 function isChildAgent(agent) {
   try {
     const header = agent && agent.session && agent.session.header
     if (!header) return false
     if (header.origin === 'subagent') return true
+    if (header.parentSession) return true
     if (header.parentSessionId) return true
     if (header.parentId) return true
+    if (typeof header.delegationDepth === 'number' && header.delegationDepth > 0) return true
     return false
   } catch {
     return false

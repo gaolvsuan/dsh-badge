@@ -133,8 +133,8 @@ test('subagent turns never raise the taskbar badge', { skip: process.platform !=
 
   const ctx = createCtx()
   const subagent = { session: { header: { origin: 'subagent' } } }
-  // An Agent Team teammate has a parent session and no origin.
-  const teammate = { session: { header: { parentSessionId: 'session-parent' } } }
+  // An Agent Team teammate has no origin: the header carries parentSession.
+  const teammate = { session: { header: { parentSession: 'session-49afb6c6', delegationDepth: 1 } } }
 
   mod.apply(ctx, {
     minTurnDurationMs: 0,
