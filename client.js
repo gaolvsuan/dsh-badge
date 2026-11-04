@@ -58,7 +58,7 @@ window.__ModuleLoader__.load({
       }
 
       var volumeValue = Number(pick('volume', 0.5))
-      var durationValue = Number(pick('minTurnDurationMs', 3000))
+      var durationValue = Number(pick('minTurnDurationMs', 1000))
       var colorValue = String(pick('badgeColor', '') || '')
 
       return {
@@ -69,7 +69,7 @@ window.__ModuleLoader__.load({
         soundPreset: typeof pick('soundPreset', 'chime') === 'string' ? pick('soundPreset', 'chime') : 'chime',
         soundUrl: typeof pick('soundUrl', '') === 'string' ? pick('soundUrl', '') : '',
         volume: isFinite(volumeValue) ? Math.min(1, Math.max(0, volumeValue)) : 0.5,
-        minTurnDurationMs: isFinite(durationValue) ? durationValue : 3000,
+        minTurnDurationMs: isFinite(durationValue) ? durationValue : 1000,
         clearOnFocus: pick('clearOnFocus', true) !== false,
         errorSound: pick('errorSound', false) === true,
         badgeColor: /^#[0-9a-f]{3,8}$/i.test(colorValue) ? colorValue : '#f5455c',
@@ -362,7 +362,7 @@ window.__ModuleLoader__.load({
 
           if (seen.running && !item.running) {
             var elapsed = seen.runningSince ? Date.now() - seen.runningSince : null
-            var min = state.cfg ? state.cfg.minTurnDurationMs : 3000
+            var min = state.cfg ? state.cfg.minTurnDurationMs : 1000
             if (elapsed === null || elapsed >= min) bump('done')
           }
 
@@ -407,6 +407,14 @@ window.__ModuleLoader__.load({
         volumeHint: '0 到 1 之间的小数。',
         minTurnDurationMsLabel: '最短回合时长（毫秒）',
         minTurnDurationHint: '短于该时长的回合不计角标、不响。',
+        on: '开',
+        off: '关',
+        soundToggle: '提示音',
+        soundToggleHint: '关掉之后只显示角标。',
+        desktopBadgeToggle: '任务栏角标',
+        desktopBadgeToggleHint: '只在 Windows 上有效。',
+        clearOnFocusToggle: '切回前台清零',
+        clearOnFocusToggleHint: '窗口回到前台后自动清空未读数。',
         positionBottomRight: '右下角',
         positionTopRight: '右上角',
         presetChime: '两音铃声',
@@ -438,6 +446,14 @@ window.__ModuleLoader__.load({
         volumeHint: 'A decimal between 0 and 1.',
         minTurnDurationMsLabel: 'Minimum turn length (ms)',
         minTurnDurationHint: 'Shorter turns stay quiet and raise no badge.',
+        on: 'On',
+        off: 'Off',
+        soundToggle: 'Chime',
+        soundToggleHint: 'Off leaves the badge without sound.',
+        desktopBadgeToggle: 'Taskbar badge',
+        desktopBadgeToggleHint: 'Windows only.',
+        clearOnFocusToggle: 'Clear on focus',
+        clearOnFocusToggleHint: 'Empty the count once the window comes back to the front.',
         positionBottomRight: 'Bottom right',
         positionTopRight: 'Top right',
         presetChime: 'Two-note chime',
@@ -458,11 +474,20 @@ window.__ModuleLoader__.load({
       },
     }
 
-    var FIELDS = ['badgeColor', 'badgePosition', 'soundPreset', 'volume', 'minTurnDurationMs']
+    var FIELDS = [
+      'badgeColor',
+      'badgePosition',
+      'soundPreset',
+      'volume',
+      'minTurnDurationMs',
+      'sound',
+      'desktopBadge',
+      'clearOnFocus',
+    ]
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.4', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.8.5', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -538,6 +563,26 @@ window.__ModuleLoader__.load({
         return locale.register(SETTINGS_NS, COPY)
       }, 'dsh-badge: settings copy')
 
+      // Boolean fields are not part of the shared helpers, but a field spec is
+      // only `{ field, format, parse }`, where parse returns a real value.
+      function settingsBooleanField(name) {
+        return {
+          field: name,
+          format: function (value) {
+            if (value === true) return 'true'
+            if (value === false) return 'false'
+            return ''
+          },
+          parse: function (text) {
+            var trimmed = String(text).trim()
+            if (trimmed === '') return { kind: 'clear' }
+            if (trimmed === 'true') return { kind: 'set', value: true }
+            if (trimmed === 'false') return { kind: 'set', value: false }
+            return undefined
+          },
+        }
+      }
+
       function BadgeCardController(scope) {
         var self = this
         this.form = new SettingsFormModel(scope, [
@@ -546,6 +591,9 @@ window.__ModuleLoader__.load({
           primitives.settingsTextField('soundPreset'),
           primitives.settingsNumberField('volume'),
           primitives.settingsNumberField('minTurnDurationMs'),
+          settingsBooleanField('sound'),
+          settingsBooleanField('desktopBadge'),
+          settingsBooleanField('clearOnFocus'),
         ])
         this.store = this.form.bind(function () {
           var snapshot = self.form.shell()
@@ -670,7 +718,9 @@ window.__ModuleLoader__.load({
             var patch = {}
             if (name === 'volume') patch.volume = Number(value)
             else if (name === 'minTurnDurationMs') patch.minTurnDurationMs = Number(value) || 0
-            else patch[name] = value
+            else if (name === 'sound' || name === 'desktopBadge' || name === 'clearOnFocus') {
+              patch[name] = value === 'true'
+            } else patch[name] = value
             applyLive(patch)
             if (name === 'volume') {
               if (saveTimer) clearTimeout(saveTimer)
@@ -696,7 +746,7 @@ window.__ModuleLoader__.load({
         var preset = value('soundPreset') || 'chime'
         var volume = Number(value('volume'))
         if (!isFinite(volume)) volume = 0.5
-        var duration = value('minTurnDurationMs') || '3000'
+        var duration = value('minTurnDurationMs') || '1000'
 
         var colorRow = jsxs('div', {
           style: ROW,
@@ -856,6 +906,28 @@ window.__ModuleLoader__.load({
           ],
         })
 
+        var toggleRow = function (name, key, hintKey) {
+          var current = value(name) === 'true' ? 'true' : 'false'
+          return jsxs('div', {
+            style: ROW,
+            children: [
+              heading(name, key),
+              choice(
+                [
+                  { value: 'true', label: translate('on') },
+                  { value: 'false', label: translate('off') },
+                ],
+                current,
+                function (next) {
+                  edit(name)(next)
+                },
+                !writable,
+              ),
+              hintKey ? jsx('p', { style: HINT }, translate(hintKey)) : null,
+            ],
+          })
+        }
+
         var footer = jsxs('div', {
           style: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 22 },
           children: [
@@ -888,7 +960,17 @@ window.__ModuleLoader__.load({
         })
 
         return jsxs('div', {
-          children: [colorRow, positionRow, soundRow, volumeRow, durationRow, footer],
+          children: [
+            colorRow,
+            positionRow,
+            soundRow,
+            volumeRow,
+            durationRow,
+            toggleRow('sound', 'soundToggle', 'soundToggleHint'),
+            toggleRow('desktopBadge', 'desktopBadgeToggle', 'desktopBadgeToggleHint'),
+            toggleRow('clearOnFocus', 'clearOnFocusToggle', 'clearOnFocusToggleHint'),
+            footer,
+          ],
         })
       }
 

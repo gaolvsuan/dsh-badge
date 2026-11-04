@@ -42,7 +42,7 @@ export const Config = Schema.object({
     .description('Optional audio URL. When set, it replaces the built-in tone.'),
   volume: Schema.number().default(0.5).volatile()
     .description('Chime volume, 0 to 1.'),
-  minTurnDurationMs: Schema.number().default(3000).volatile()
+  minTurnDurationMs: Schema.number().default(1000).volatile()
     .description('Ignore turns shorter than this, so quick replies stay silent.'),
   clearOnFocus: Schema.boolean().default(true)
     .description('Reset the unread count when the tab regains focus.'),
@@ -212,8 +212,8 @@ function watchTurnsForTaskbar(ctx, config) {
   }
 
   const startedAt = new Map()
-  const minDurationValue = Number(readConfigValue(config, 'minTurnDurationMs', 3000))
-  const minDuration = Number.isFinite(minDurationValue) ? minDurationValue : 3000
+  const minDurationValue = Number(readConfigValue(config, 'minTurnDurationMs', 1000))
+  const minDuration = Number.isFinite(minDurationValue) ? minDurationValue : 1000
 
   ctx.on('agent/status', ({ agent, status }) => {
     // A subagent's turn is internal work the user never sees as a session, and

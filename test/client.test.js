@@ -415,7 +415,11 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
     resetField() {},
   })
   assert.equal(rendered.type, 'div')
-  assert.equal(rendered.props.children.length, 6, 'colour, corner, sound, volume, duration, footer')
+  assert.equal(
+    rendered.props.children.length,
+    9,
+    'colour, corner, sound, volume, duration, three toggles, footer',
+  )
 
   // The buttons must carry their label as children: jsx's third argument is the
   // key, and passing the label there renders empty pills.
@@ -430,6 +434,29 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
     soundButtons.map((button) => button.props.children),
     ['presetChime', 'presetBeep', 'presetRise'],
   )
+
+  // The three booleans are rendered as on/off pills. Their labels carry text
+  // through children, and a click hands back the string the boolean field spec
+  // parses into true or false.
+  const calls = []
+  const toggled = component({
+    view: 'form',
+    t: (key) => key,
+    useBadgeCard: face.hooks.badgeCard,
+    save() {},
+    discard() {},
+    edit(name, value) {
+      calls.push([name, value])
+    },
+    resetField() {},
+  })
+  const soundToggle = toggled.props.children[5].props.children[1].props.children
+  assert.deepEqual(
+    soundToggle.map((button) => button.props.children),
+    ['on', 'off'],
+  )
+  soundToggle[1].props.onClick()
+  assert.deepEqual(calls, [['sound', 'false']])
 })
 
 test('unwraps volatile references handed over by the loader', async () => {

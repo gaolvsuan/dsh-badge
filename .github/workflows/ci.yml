@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The host half imports @deepseek-ai/schemastery, which is published, so a
+      # plain install is enough. There is no lockfile to pin.
+      - run: npm install --no-audit --no-fund
+
+      - run: npm run check
+
+      # The PowerShell helper tests skip themselves off Windows; everything else
+      # runs here.
+      - run: npm test
