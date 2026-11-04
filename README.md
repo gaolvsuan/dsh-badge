@@ -76,7 +76,7 @@ dsh plugin --profile desktop add dsh-badge
 | `soundPreset` | `chime` | `chime` 两音铃声，`beep` 单声方波，`rise` 三音上行 |
 | `soundUrl` | `''` | 自定义音频地址，设置后替代内置音 |
 | `volume` | `0.5` | 音量，0 到 1，走幂曲线而非线性 |
-| `minTurnDurationMs` | `3000` | 短于该时长的回合不计角标、不响 |
+| `minTurnDurationMs` | `1000` | 短于该时长的回合不计角标、不响 |
 | `clearOnFocus` | `true` | 标签页重新可见时清零 |
 | `badgeColor` | `#f5455c` | 角标圆点颜色，十六进制 |
 | `badgePosition` | `br` | 角标位置，`br` 右下角，`tr` 右上角 |
@@ -94,13 +94,14 @@ dsh plugin --profile desktop add dsh-badge
 - **位置**：右下角 / 右上角二选一
 - **提示音**：两音铃声 / 单声方波 / 三音上行，点哪个当场响哪个，旁边还有「试听当前音色」
 - **音量**：0–100% 滑杆
-- **最短回合时长**：数字输入
+- **最短回合时长**：数字输入，默认 1 秒
+- **开关**：提示音、任务栏角标、切回前台清零，各一个开/关
 
 改完立刻生效，停手后自动写入 Host 设置文档，没有保存按钮。底部只显示「已自动保存」或「保存中…」，写入失败时出现「重试保存」。
 
 实现上，表单注册进 `plugins.bundle.config` 槽，键是包名 `dsh-badge`。社区组合包不能用 `plugins.item`，那个槽只列官方插件。表单只在 Host 提供对应设置命名空间时才注册，所以没装这个插件的部署看不到它。
 
-控件是自己画的：DSH 共享的 `SettingsValueField` 只渲染文本框，没有开关、下拉和取色器，所以这里保留 `SettingsFormModel` 负责暂存与提交，界面用原生控件自己拼。布尔类配置仍走配置文件。
+控件是自己画的：DSH 共享的 `SettingsValueField` 只渲染文本框，没有开关、下拉和取色器，所以这里保留 `SettingsFormModel` 负责暂存与提交，界面用原生控件自己拼。布尔类配置现在也是开关，写回同一份设置文档。
 
 可编辑字段声明为 `volatile()`：Host 只为含 volatile 字段的条目提供设置命名空间。这类字段在宿主侧是带 `get()` 的引用对象，且不会序列化进浏览器 bundle，所以客户端从 settings scope 的 `getSnapshot().value` 读实时值并订阅后续变化。
 

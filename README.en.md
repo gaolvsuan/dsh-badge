@@ -76,7 +76,7 @@ Override the defaults in the profile's `cordis.patch.yml`. Both `id` and `name` 
 | `soundPreset` | `chime` | `chime` two-note bell, `beep` square blip, `rise` three ascending notes |
 | `soundUrl` | `''` | Custom audio URL, replaces the built-in tone |
 | `volume` | `0.5` | Volume from 0 to 1, applied on a power curve rather than linearly |
-| `minTurnDurationMs` | `3000` | Turns shorter than this stay quiet and raise no badge |
+| `minTurnDurationMs` | `1000` | Turns shorter than this stay quiet and raise no badge |
 | `clearOnFocus` | `true` | Clear the count when the tab becomes visible again |
 | `badgeColor` | `#f5455c` | Hex colour of the badge disc |
 | `badgePosition` | `br` | `br` bottom-right, `tr` top-right |
@@ -94,13 +94,14 @@ Settings → **Plugin manager** → open the `dsh-badge` bundle, and the form is
 - **Corner**: bottom-right or top-right
 - **Chime**: two-note bell, square blip or three-note rise; picking one plays it, and a "Preview current tone" button repeats it
 - **Volume**: a 0–100% slider
-- **Minimum turn length**: a number input
+- **Minimum turn length**: a number input, one second by default
+- **Switches**: chime, taskbar badge, clear on focus — one on/off each
 
 Changes apply immediately and are written to the Host settings document after a short pause. There is no save button; the footer shows "Saved automatically" or "Saving…", and offers a retry when the write is rejected.
 
 The form registers into the `plugins.bundle.config` slot under the package name `dsh-badge`. Community bundles cannot use `plugins.item`, which only lists official plugins. It registers only while the Host serves the matching settings namespace, so a deployment without this plugin shows no trace of it.
 
-The controls are drawn by hand: the shared `SettingsValueField` renders a text input only, with no switch, select or colour picker, so the card keeps `SettingsFormModel` for staging and saving and builds the interface from native controls. Boolean options still live in the config file.
+The controls are drawn by hand: the shared `SettingsValueField` renders a text input only, with no switch, select or colour picker, so the card keeps `SettingsFormModel` for staging and saving and builds the interface from native controls. Boolean options are switches too, written to the same settings document.
 
 The editable fields are declared `volatile()`: the Host only serves a settings namespace for entries that have at least one. On the host such a field is a reference object with `get()`, and it is never serialised into the browser bundle, so the client reads live values from the settings scope's `getSnapshot().value` and subscribes to later changes.
 
