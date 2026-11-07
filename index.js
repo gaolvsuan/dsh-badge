@@ -52,11 +52,11 @@ export const Config = Schema.object({
     .description('Hex colour of the badge disc, for example #f5455c.'),
   badgePosition: Schema.string().default('br').volatile()
     .description('Corner the badge sits in: "br" bottom-right, "tr" top-right.'),
-  desktopBadge: Schema.boolean().default(true)
+  desktopBadge: Schema.boolean().default(true).volatile()
     .description('Windows only: paint the count on the app taskbar button through taskbar.ps1.'),
   desktopBadgeWindow: Schema.string().default('DeepSeek Harness')
     .description('Process name whose window carries the taskbar button.'),
-  desktopBadgeClearOnFocus: Schema.boolean().default(true)
+  desktopBadgeClearOnFocus: Schema.boolean().default(true).volatile()
     .description('Clear the taskbar badge when that window comes to the foreground.'),
   debugLog: Schema.string().default('')
     .description('Optional file path. When set, the host appends one line every time this plugin loads, which is how you tell a missing badge apart from a plugin that never mounted.'),
@@ -251,6 +251,10 @@ function watchTurnsForTaskbar(ctx, config) {
   const minDurationValue = Number(readConfigValue(config, 'minTurnDurationMs', 1000))
   const minDuration = Number.isFinite(minDurationValue) ? minDurationValue : 1000
 
+  // Read on every use: the switch is volatile, so its reference carries the
+  // accepted value as soon as the settings page writes it.
+  const taskbarOn = () => readConfigValue(helperConfig || config, 'desktopBadge', true) !== false
+
   ctx.on('agent/status', ({ agent, status }) => {
     // A subagent's turn is internal work the user never sees as a session, and
     // the browser half already skips those rows. Counting them here made the
@@ -264,11 +268,13 @@ function watchTurnsForTaskbar(ctx, config) {
     startedAt.delete(agent)
     if (started == null) return
     if (Date.now() - started < minDuration) return
+    if (!taskbarOn()) return
     send('add')
   })
 
   ctx.on('agent/error', ({ agent } = {}) => {
     if (isChildAgent(agent)) return
+    if (!taskbarOn()) return
     send('add')
   })
 
@@ -276,29 +282,42 @@ function watchTurnsForTaskbar(ctx, config) {
     startedAt.delete(agent)
   })
 
-  // The colour is read again on every beat instead of once at apply: a volatile
-  // field's reference reports the accepted value live, so a settings change
-  // reaches a running helper without the plugin being reloaded.
+  // Both switches are read live: a volatile reference reports the accepted
+  // value as soon as the settings page writes it, so turning the taskbar badge
+  // off stops the helper without waiting for a reload.
   let lastColor = badgeColorOf(config)
+  let lastOn = taskbarOn()
   const colourWatch = setInterval(() => {
-    const current = badgeColorOf(helperConfig)
-    if (current === lastColor) return
-    lastColor = current
-    if (!helper) return
-    try {
-      helper.stdin.write('color ' + current + '\n')
-    } catch {
-      helper = null
+    const on = taskbarOn()
+    if (on !== lastOn) {
+      lastOn = on
+      if (on) helperConfig = config
+      else stopHelper()
+    }
+
+    const current = badgeColorOf(helperConfig || config)
+    if (current !== lastColor) {
+      lastColor = current
+      if (!helper) return
+      try {
+        helper.stdin.write('color ' + current + '\n')
+      } catch {
+        helper = null
+      }
     }
   }, 800)
   if (typeof colourWatch.unref === 'function') colourWatch.unref()
   ctx.effect(() => () => clearInterval(colourWatch))
 
-  if (config.desktopBadgeClearOnFocus !== false) {
-    const tick = setInterval(() => send('tick'), 800)
-    if (typeof tick.unref === 'function') tick.unref()
-    ctx.effect(() => () => clearInterval(tick))
-  }
+  // Always beat: the interval is what notices a turn of `clearOnFocus` and what
+  // revives a parked helper, so it cannot be decided once at apply time.
+  const tick = setInterval(() => {
+    if (!taskbarOn()) return
+    if (readConfigValue(helperConfig || config, 'desktopBadgeClearOnFocus', true) === false) return
+    send('tick')
+  }, 800)
+  if (typeof tick.unref === 'function') tick.unref()
+  ctx.effect(() => () => clearInterval(tick))
 
   ctx.effect(() => () => stopHelper())
 }
@@ -329,7 +348,9 @@ export function apply(ctx, config) {
   }
 
   if (process.platform !== 'win32') return
-  if (config?.enabled === false || config?.desktopBadge === false) return
+  // `desktopBadge` is not checked here on purpose: it is volatile, and the
+  // watch has to exist to notice it being switched back on.
+  if (config?.enabled === false) return
 
   try {
     watchTurnsForTaskbar(ctx, config || {})

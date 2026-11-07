@@ -479,6 +479,20 @@ test('turning the badge off puts the original icon back', async () => {
   assert.equal(env.faviconWrites[1], 'data:image/svg+xml;base64,BASE')
 })
 
+test('a title the app owns keeps its own count', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+  mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
+
+  // The app renames the document; a leading "(2)" there is not our prefix.
+  env.document.title = '(2) 我的会话'
+
+  sessions.update('session-a', { running: true })
+  sessions.update('session-a', { running: false })
+
+  assert.equal(env.document.title, '(1) (2) 我的会话')
+})
+
 test('unwraps volatile references handed over by the loader', async () => {
   const { env, mod } = await loadClient()
   const sessions = createSessions()

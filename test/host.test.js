@@ -119,8 +119,7 @@ test('turns shorter than minTurnDurationMs never reach the helper', { skip: proc
   }
 })
 
-test('subagent turns never raise the taskbar badge', { skip: process.platform !== 'win32' }, async (t) => {
-  let mod
+test('subagent turns never raise the taskbar badge', { skip: process.platform !== 'win32' }, async (t) => {  let mod
   try {
     mod = await import(pathToFileURL(indexPath).href)
   } catch (error) {
@@ -192,6 +191,80 @@ test('a colour change reaches a running helper without a reload', { skip: proces
       8_000,
     )
     assert.ok(repainted, `helper never repainted after the colour changed; log:\n${readLog(logPath)}`)
+  } finally {
+    ctx.dispose()
+    fs.rmSync(logPath, { force: true })
+  }
+})
+
+test('the taskbar switch off never spawns a helper', { skip: process.platform !== 'win32' }, async (t) => {
+  let mod
+  try {
+    mod = await import(pathToFileURL(indexPath).href)
+  } catch (error) {
+    t.skip(`host half needs @deepseek-ai/schemastery: ${error.message}`)
+    return
+  }
+
+  const logPath = path.join(os.tmpdir(), `dsh-badge-off-${process.pid}.log`)
+  fs.rmSync(logPath, { force: true })
+
+  const ctx = createCtx()
+  mod.apply(ctx, {
+    minTurnDurationMs: 0,
+    desktopBadge: false,
+    debugLog: logPath,
+    desktopBadgeClearOnFocus: false,
+  })
+
+  try {
+    const agent = { session: { header: {} } }
+    ctx.emit('agent/status', { agent, status: 'running' })
+    ctx.emit('agent/status', { agent, status: 'idle' })
+
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+    const log = readLog(logPath)
+    assert.ok(!log.includes('helper-spawn'), 'no helper may be spawned while the switch is off')
+    assert.ok(!log.includes('state=shown'), 'nothing may be painted while the switch is off')
+  } finally {
+    ctx.dispose()
+    fs.rmSync(logPath, { force: true })
+  }
+})
+
+test('switching the taskbar badge off stops a running helper', { skip: process.platform !== 'win32' }, async (t) => {
+  let mod
+  try {
+    mod = await import(pathToFileURL(indexPath).href)
+  } catch (error) {
+    t.skip(`host half needs @deepseek-ai/schemastery: ${error.message}`)
+    return
+  }
+
+  const logPath = path.join(os.tmpdir(), `dsh-badge-toggle-${process.pid}.log`)
+  fs.rmSync(logPath, { force: true })
+
+  // A volatile reference: the switch reports its accepted value as it changes.
+  let switchOn = true
+  const ctx = createCtx()
+  mod.apply(ctx, {
+    minTurnDurationMs: 0,
+    desktopBadge: { get: () => switchOn },
+    debugLog: logPath,
+    desktopBadgeClearOnFocus: false,
+  })
+
+  try {
+    const agent = { session: { header: {} } }
+    ctx.emit('agent/status', { agent, status: 'running' })
+    ctx.emit('agent/status', { agent, status: 'idle' })
+
+    const painted = await waitFor(() => readLog(logPath).includes('state=shown'), 8_000)
+    assert.ok(painted, `the badge never painted; log:\n${readLog(logPath)}`)
+
+    switchOn = false
+    const quit = await waitFor(() => readLog(logPath).includes('state=bye'), 8_000)
+    assert.ok(quit, `the helper kept running after the switch went off; log:\n${readLog(logPath)}`)
   } finally {
     ctx.dispose()
     fs.rmSync(logPath, { force: true })

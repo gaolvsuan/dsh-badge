@@ -184,15 +184,21 @@ window.__ModuleLoader__.load({
     function applyTitle() {
       if (typeof document === 'undefined') return
       var cfg = state.cfg
-      // Strip our own prefix instead of caching a base title: the app renames
-      // the document as sessions change, and a cached title would go stale.
+      // Only strip a prefix this plugin wrote. The app replaces the title as
+      // sessions change, and a title of its own that happens to start with a
+      // count must survive untouched.
       var current = String(document.title || '')
-      var base = current.replace(/^\(\d+\)\s*/, '') || 'DeepSeek Harness'
-      if (cfg && cfg.titlePrefix && state.unread > 0) {
-        document.title = '(' + state.unread + ') ' + base
+      var base
+      if (state.lastWritten && current === state.lastWritten) {
+        base = state.lastBase || 'DeepSeek Harness'
       } else {
-        document.title = base
+        base = current || 'DeepSeek Harness'
       }
+      state.lastBase = base
+      var next = base
+      if (cfg && cfg.titlePrefix && state.unread > 0) next = '(' + state.unread + ') ' + base
+      state.lastWritten = next
+      document.title = next
     }
 
     /* ----------------------------------------------------------------- sound */
@@ -387,6 +393,16 @@ window.__ModuleLoader__.load({
           seen.running = !!item.running
           prev.set(id, seen)
         }
+
+        // Sessions come and go; without this the bookkeeping map keeps every
+        // id that was ever open.
+        if (prev.size > nextIds.length) {
+          var alive = {}
+          for (var k = 0; k < nextIds.length; k++) alive[nextIds[k]] = true
+          prev.forEach(function (value, key) {
+            if (!alive[key]) prev.delete(key)
+          })
+        }
       })
 
       if (ctx && typeof ctx.effect === 'function') {
@@ -504,7 +520,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.6', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.8.7', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
