@@ -31,6 +31,8 @@ window.__ModuleLoader__.load({
       unread: 0,
       baseIcon: null,
       baseIconLoaded: false,
+      baseHref: null,
+      badgePainted: false,
       iconLink: null,
       audio: null,
       cfg: null,
@@ -98,6 +100,9 @@ window.__ModuleLoader__.load({
       var link = document.querySelector('link[rel~="icon"]')
       var href = link && link.getAttribute('href')
       if (!href) return
+      // Kept as text, not only as an Image: turning the badge off has to put
+      // the original href back, and redrawing cannot do that faithfully.
+      state.baseHref = href
       var img = new Image()
       img.onload = function () {
         state.baseIcon = img
@@ -121,7 +126,18 @@ window.__ModuleLoader__.load({
 
     function paint() {
       var cfg = state.cfg
-      if (!cfg || !cfg.badge || typeof document === 'undefined') return
+      if (!cfg || typeof document === 'undefined') return
+
+      // Badge switched off while a count was showing: put the site's own icon
+      // back instead of returning, or the last painted number would stay on
+      // the tab until a reload.
+      if (!cfg.badge) {
+        if (state.badgePainted && state.baseHref) {
+          state.badgePainted = false
+          iconLink().setAttribute('href', state.baseHref)
+        }
+        return
+      }
 
       var canvas = document.createElement('canvas')
       canvas.width = ICON_SIZE
@@ -160,6 +176,7 @@ window.__ModuleLoader__.load({
       }
 
       iconLink().setAttribute('href', canvas.toDataURL('image/png'))
+      state.badgePainted = count > 0
     }
 
     /* ----------------------------------------------------------------- title */
@@ -487,7 +504,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.5', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.8.6', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -907,7 +924,9 @@ window.__ModuleLoader__.load({
         })
 
         var toggleRow = function (name, key, hintKey) {
-          var current = value(name) === 'true' ? 'true' : 'false'
+          // All three default to on, so an empty field (no accepted value yet)
+          // must read as on rather than as off.
+          var current = value(name) === 'false' ? 'false' : 'true'
           return jsxs('div', {
             style: ROW,
             children: [

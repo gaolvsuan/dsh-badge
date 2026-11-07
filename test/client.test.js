@@ -457,6 +457,26 @@ test('registers a Plugins-page card when the Host serves the namespace', async (
   )
   soundToggle[1].props.onClick()
   assert.deepEqual(calls, [['sound', 'false']])
+
+  // No accepted value yet means the default, and all three default to on.
+  assert.equal(soundToggle[0].props.style.fontWeight, 600, 'the on pill is active by default')
+})
+
+test('turning the badge off puts the original icon back', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+  mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
+
+  sessions.update('session-a', { running: true })
+  sessions.update('session-a', { running: false })
+  assert.equal(env.faviconWrites.length, 1, 'the count is painted on the icon')
+
+  // A settings write re-applies the plugin with the new config.
+  mod.apply(makeCtx(createSessions()), { minTurnDurationMs: 0, badge: false })
+  env.window.__DSH_BADGE__.clear()
+
+  assert.equal(env.faviconWrites.length, 2, 'the badge is taken off the icon')
+  assert.equal(env.faviconWrites[1], 'data:image/svg+xml;base64,BASE')
 })
 
 test('unwraps volatile references handed over by the loader', async () => {

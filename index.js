@@ -67,6 +67,15 @@ export const Config = Schema.object({
 let helper = null
 let helperConfig = null
 
+// A helper that dies right after it starts — PowerShell blocked by policy, a
+// missing script — would otherwise be respawned by the next tick, twice a
+// second, forever. Three quick deaths park the helper for five minutes.
+const SPAWN_FAILURE_WINDOW_MS = 5000
+const SPAWN_FAILURE_LIMIT = 3
+const SPAWN_PARK_MS = 5 * 60 * 1000
+let spawnFailures = 0
+let spawnParkedUntil = 0
+
 function helperScript() {
   return fileURLToPath(new URL('./taskbar.ps1', import.meta.url))
 }
@@ -141,6 +150,9 @@ function startHelper(config) {
   // debug log configured, keep the state lines 鈥?they are the only evidence
   // that the overlay was actually painted.
   child.stdout.on('data', (chunk) => {
+    // Any output means the helper got far enough to speak, so the failure
+    // streak from an earlier crash no longer applies.
+    spawnFailures = 0
     if (!config.debugLog) return
     try {
       appendFileSync(config.debugLog, String(chunk))
@@ -150,22 +162,46 @@ function startHelper(config) {
   })
   child.on('error', () => {
     if (helper === child) helper = null
+    noteHelperDeath(child)
   })
   child.on('exit', () => {
     if (helper === child) helper = null
+    noteHelperDeath(child)
   })
 
   helperConfig = config
   return child
 }
 
+// Counts only deaths that come soon after a spawn: a helper that lived for a
+// while and then stopped is normal, one that dies at once is a broken setup.
+function noteHelperDeath(child) {
+  const lived = Date.now() - (child.spawnedAt || 0)
+  if (lived > SPAWN_FAILURE_WINDOW_MS) {
+    spawnFailures = 0
+    return
+  }
+  spawnFailures += 1
+  if (spawnFailures >= SPAWN_FAILURE_LIMIT) {
+    spawnParkedUntil = Date.now() + SPAWN_PARK_MS
+    spawnFailures = 0
+  }
+}
+
 function send(command) {
   if (!helperConfig) return
+  if (Date.now() < spawnParkedUntil) return
   if (!helper || helper.exitCode !== null) {
     try {
       helper = startHelper(helperConfig)
+      helper.spawnedAt = Date.now()
     } catch {
       helper = null
+      spawnFailures += 1
+      if (spawnFailures >= SPAWN_FAILURE_LIMIT) {
+        spawnParkedUntil = Date.now() + SPAWN_PARK_MS
+        spawnFailures = 0
+      }
       return
     }
   }
