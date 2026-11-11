@@ -75,6 +75,9 @@ const SPAWN_FAILURE_LIMIT = 3
 const SPAWN_PARK_MS = 5 * 60 * 1000
 let spawnFailures = 0
 let spawnParkedUntil = 0
+// True while the helper has something on screen. The foreground beat is idle
+// the rest of the time, which is most of the time.
+let badgeVisible = false
 
 function helperScript() {
   return fileURLToPath(new URL('./taskbar.ps1', import.meta.url))
@@ -147,15 +150,22 @@ function startHelper(config) {
   }
 
   // Drain stdout: an unread pipe would eventually block the helper. With a
-  // debug log configured, keep the state lines 鈥?they are the only evidence
+  // debug log configured, keep the state lines — they are the only evidence
   // that the overlay was actually painted.
   child.stdout.on('data', (chunk) => {
     // Any output means the helper got far enough to speak, so the failure
     // streak from an earlier crash no longer applies.
     spawnFailures = 0
+
+    // The same lines tell the host whether anything is on screen, which is
+    // what decides if the foreground beat has any work to do at all.
+    const text = String(chunk)
+    if (text.includes('state=shown') || text.includes('state=asked')) badgeVisible = true
+    else if (text.includes('state=cleared') || text.includes('state=bye')) badgeVisible = false
+
     if (!config.debugLog) return
     try {
-      appendFileSync(config.debugLog, String(chunk))
+      appendFileSync(config.debugLog, text)
     } catch {
       // Diagnostics must not break the helper.
     }
@@ -255,11 +265,26 @@ function watchTurnsForTaskbar(ctx, config) {
   // accepted value as soon as the settings page writes it.
   const taskbarOn = () => readConfigValue(helperConfig || config, 'desktopBadge', true) !== false
 
+  // An agent that stops to ask something reports `blocked` while it waits. The
+  // taskbar says so with a question mark, which outranks the count on the tab
+  // for the same reason: nothing can move until the user answers.
+  const askingAgents = new Set()
+
   ctx.on('agent/status', ({ agent, status }) => {
     // A subagent's turn is internal work the user never sees as a session, and
     // the browser half already skips those rows. Counting them here made the
     // taskbar number run ahead of the tab number.
     if (isChildAgent(agent)) return
+
+    if (status === 'blocked') {
+      const first = askingAgents.size === 0
+      askingAgents.add(agent)
+      if (first && taskbarOn()) send('ask')
+      return
+    }
+
+    if (askingAgents.delete(agent) && askingAgents.size === 0 && taskbarOn()) send('askoff')
+
     if (status === 'running') {
       startedAt.set(agent, Date.now())
       return
@@ -280,6 +305,9 @@ function watchTurnsForTaskbar(ctx, config) {
 
   ctx.on('agent/disposed', ({ agent }) => {
     startedAt.delete(agent)
+    // A turn can be disposed while it is waiting for an answer; the set must not
+    // keep the agent around after that.
+    askingAgents.delete(agent)
   })
 
   // Both switches are read live: a volatile reference reports the accepted
@@ -305,14 +333,14 @@ function watchTurnsForTaskbar(ctx, config) {
         helper = null
       }
     }
-  }, 800)
+  }, 2000)
   if (typeof colourWatch.unref === 'function') colourWatch.unref()
   ctx.effect(() => () => clearInterval(colourWatch))
 
-  // Always beat: the interval is what notices a turn of `clearOnFocus` and what
-  // revives a parked helper, so it cannot be decided once at apply time.
+  // The foreground beat only runs while something is actually on screen: the
+  // helper reports every state change, and an empty badge has nothing to clear.
   const tick = setInterval(() => {
-    if (!taskbarOn()) return
+    if (!badgeVisible) return
     if (readConfigValue(helperConfig || config, 'desktopBadgeClearOnFocus', true) === false) return
     send('tick')
   }, 800)

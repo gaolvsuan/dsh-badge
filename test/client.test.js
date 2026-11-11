@@ -479,6 +479,20 @@ test('turning the badge off puts the original icon back', async () => {
   assert.equal(env.faviconWrites[1], 'data:image/svg+xml;base64,BASE')
 })
 
+test('a pending question switches the badge to a question mark', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+  mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
+
+  sessions.update('session-a', { pendingInteraction: { kind: 'question' } })
+  assert.equal(env.document.title, '(?) DeepSeek Harness')
+  assert.equal(env.faviconWrites.length, 1)
+
+  // Answering puts the tab back to the plain title, with no count invented.
+  sessions.update('session-a', { pendingInteraction: undefined })
+  assert.equal(env.document.title, 'DeepSeek Harness')
+})
+
 test('a title the app owns keeps its own count', async () => {
   const { env, mod } = await loadClient()
   const sessions = createSessions()

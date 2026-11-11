@@ -24,11 +24,15 @@ window.__ModuleLoader__.load({
     var inject = ['sessions', 'slots', 'locale']
 
     var ICON_SIZE = 64
-    var BADGE_COLOR = '#f5455c'
     var BRAND_COLOR = '#4d6bfe'
+    // A question is not another count: amber separates "answer me" from "n are
+    // waiting" at a glance, including for people who cannot tell the digits
+    // apart at 16 px.
+    var ASK_COLOR = '#f59e0b'
 
     var state = {
       unread: 0,
+      pending: 0,
       baseIcon: null,
       baseIconLoaded: false,
       baseHref: null,
@@ -153,16 +157,19 @@ window.__ModuleLoader__.load({
         g.fill()
       }
 
+      var asking = state.pending > 0
       var count = state.unread
-      if (count > 0) {
-        var label = count > 99 ? '99+' : String(count)
+      if (asking || count > 0) {
+        // A blocked turn outranks the count: the user has to answer before
+        // anything else can move, so the tab says so with a question mark.
+        var label = asking ? '?' : count > 99 ? '99+' : String(count)
         var r = ICON_SIZE * 0.33
         var cx = cfg.badgePosition === 'tr' ? r + 1 : ICON_SIZE - r - 1
         var cy = r + 1
 
         g.beginPath()
         g.arc(cx, cy, r, 0, Math.PI * 2)
-        g.fillStyle = cfg.badgeColor
+        g.fillStyle = asking ? ASK_COLOR : cfg.badgeColor
         g.fill()
         g.lineWidth = 3
         g.strokeStyle = 'rgba(255, 255, 255, 0.92)'
@@ -176,7 +183,7 @@ window.__ModuleLoader__.load({
       }
 
       iconLink().setAttribute('href', canvas.toDataURL('image/png'))
-      state.badgePainted = count > 0
+      state.badgePainted = asking || count > 0
     }
 
     /* ----------------------------------------------------------------- title */
@@ -196,7 +203,10 @@ window.__ModuleLoader__.load({
       }
       state.lastBase = base
       var next = base
-      if (cfg && cfg.titlePrefix && state.unread > 0) next = '(' + state.unread + ') ' + base
+      if (cfg && cfg.titlePrefix) {
+        if (state.pending > 0) next = '(?) ' + base
+        else if (state.unread > 0) next = '(' + state.unread + ') ' + base
+      }
       state.lastWritten = next
       document.title = next
     }
@@ -403,6 +413,19 @@ window.__ModuleLoader__.load({
             if (!alive[key]) prev.delete(key)
           })
         }
+
+        // One question on any session is enough to switch the tab to "?"; the
+        // count underneath is kept so it reappears once the answer is in.
+        var asking = 0
+        prev.forEach(function (row) {
+          if (row.pending) asking += 1
+        })
+        var changed = asking > 0 !== (state.pending > 0)
+        state.pending = asking
+        if (changed) {
+          paint()
+          applyTitle()
+        }
       })
 
       if (ctx && typeof ctx.effect === 'function') {
@@ -520,7 +543,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.8.7', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.9.0', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context

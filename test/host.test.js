@@ -271,6 +271,43 @@ test('switching the taskbar badge off stops a running helper', { skip: process.p
   }
 })
 
+test('a blocked turn asks on the taskbar', { skip: process.platform !== 'win32' }, async (t) => {
+  let mod
+  try {
+    mod = await import(pathToFileURL(indexPath).href)
+  } catch (error) {
+    t.skip(`host half needs @deepseek-ai/schemastery: ${error.message}`)
+    return
+  }
+
+  const logPath = path.join(os.tmpdir(), `dsh-badge-ask-${process.pid}.log`)
+  fs.rmSync(logPath, { force: true })
+
+  const ctx = createCtx()
+  mod.apply(ctx, {
+    minTurnDurationMs: 0,
+    debugLog: logPath,
+    desktopBadgeClearOnFocus: false,
+  })
+
+  try {
+    const agent = { session: { header: {} } }
+    ctx.emit('agent/status', { agent, status: 'running' })
+    ctx.emit('agent/status', { agent, status: 'blocked' })
+
+    const asked = await waitFor(() => readLog(logPath).includes('state=asked'), 8_000)
+    assert.ok(asked, `the taskbar never showed the question mark; log:\n${readLog(logPath)}`)
+
+    // Answering resumes the turn: the mark has to go away on its own.
+    ctx.emit('agent/status', { agent, status: 'running' })
+    const cleared = await waitFor(() => readLog(logPath).includes('state=cleared'), 8_000)
+    assert.ok(cleared, `the question mark stayed after the answer; log:\n${readLog(logPath)}`)
+  } finally {
+    ctx.dispose()
+    fs.rmSync(logPath, { force: true })
+  }
+})
+
 function readLog(logPath) {
   try {
     return fs.readFileSync(logPath, 'utf8')

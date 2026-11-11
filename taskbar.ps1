@@ -7,6 +7,8 @@
 #
 # Protocol: one command per line on stdin, one state line per command on stdout.
 #   add          increment the count and redraw the overlay
+#   ask          show a question mark instead of the count, until askoff
+#   askoff       drop the question mark and fall back to the count
 #   tick         clear the overlay when the window has just come to the foreground
 #   clear        drop the count and remove the overlay
 #   color <hex>  change the disc colour and redraw a visible overlay
@@ -79,10 +81,12 @@ public static class Native
 Add-Type -AssemblyName System.Drawing
 
 $script:count = 0
+$script:ask = $false
 $script:hwnd = [IntPtr]::Zero
 $script:icon = [IntPtr]::Zero
 $script:wasForeground = $false
 $script:seenTick = $false
+$script:beats = 0
 
 # The disc colour comes from the plugin config; a malformed value falls back to
 # the red the badge ships with rather than failing the helper. Components are
@@ -128,8 +132,7 @@ function Get-TargetWindow {
     return $script:hwnd
 }
 
-function New-BadgeIcon([int]$value) {
-    $text = if ($value -gt 99) { '99' } elseif ($value -gt 0) { [string]$value } else { '' }
+function New-BadgeIcon([string]$text) {
     $size = 32
 
     $bitmap = New-Object System.Drawing.Bitmap $size, $size
@@ -138,18 +141,24 @@ function New-BadgeIcon([int]$value) {
     $graphics.Clear([System.Drawing.Color]::Transparent)
 
     $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, $script:badgeRgb[0], $script:badgeRgb[1], $script:badgeRgb[2]))
-    $graphics.FillEllipse($brush, 0, 0, $size - 1, $size - 1)
-
     $font = New-Object System.Drawing.Font('Segoe UI', $(if ($text.Length -gt 1) { 13 } else { 16 }), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
     $format = New-Object System.Drawing.StringFormat
-    $format.Alignment = [System.Drawing.StringAlignment]::Center
-    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
     $rect = New-Object System.Drawing.RectangleF 0, 0, $size, $size
-    $graphics.DrawString($text, $font, [System.Drawing.Brushes]::White, $rect, $format)
-
-    $graphics.Dispose()
-    $handle = $bitmap.GetHicon()
-    $bitmap.Dispose()
+    try {
+        $graphics.FillEllipse($brush, 0, 0, $size - 1, $size - 1)
+        $format.Alignment = [System.Drawing.StringAlignment]::Center
+        $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+        $graphics.DrawString($text, $font, [System.Drawing.Brushes]::White, $rect, $format)
+        $handle = $bitmap.GetHicon()
+    } finally {
+        # The helper outlives hundreds of turns; undisposed GDI objects would
+        # accumulate one font and one brush per repaint.
+        $format.Dispose()
+        $font.Dispose()
+        $brush.Dispose()
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
     return $handle
 }
 
@@ -172,7 +181,17 @@ function Publish {
         return
     }
 
-    $next = New-BadgeIcon $Value
+    if ($Value -eq 1 -and $script:ask) {
+        $next = New-BadgeIcon -text '?'
+        [Native]::SetOverlay($window, $next, 'question')
+        if ($script:icon -ne [IntPtr]::Zero) { [void][Native]::DestroyIcon($script:icon) }
+        $script:icon = $next
+        Write-Output "state=asked hwnd=$window"
+        return
+    }
+
+    $label = if ($Value -gt 99) { '99' } else { [string]$Value }
+    $next = New-BadgeIcon -text $label
     [Native]::SetOverlay($window, $next, [string]$Value)
     if ($script:icon -ne [IntPtr]::Zero) { [void][Native]::DestroyIcon($script:icon) }
     $script:icon = $next
@@ -180,6 +199,9 @@ function Publish {
 }
 
 function Sync-Foreground {
+    # Nothing on screen means nothing to clear, and this runs on every beat.
+    if ($script:count -le 0 -and -not $script:ask) { return }
+
     $window = Get-TargetWindow
     if ($window -eq [IntPtr]::Zero) {
         $script:wasForeground = $false
@@ -196,9 +218,12 @@ function Sync-Foreground {
         return
     }
 
-    if ($foreground -and -not $script:wasForeground -and $script:count -gt 0) {
-        $script:count = 0
-        Publish -Value 0
+    if ($foreground -and -not $script:wasForeground) {
+        if ($script:count -gt 0 -or $script:ask) {
+            $script:count = 0
+            $script:ask = $false
+            Publish -Value 0
+        }
     }
     $script:wasForeground = $foreground
 }
@@ -209,7 +234,10 @@ while ($true) {
     $line = [Console]::In.ReadLine()
     if ($null -eq $line) { break }
 
-    if (-not (Test-ParentAlive)) {
+    # Checking the parent costs a process lookup, so it runs every tenth
+    # command rather than on every beat.
+    $script:beats++
+    if ($script:beats % 10 -eq 0 -and -not (Test-ParentAlive)) {
         $script:count = 0
         Publish -Value 0
         Write-Output 'state=parent-gone'
@@ -221,15 +249,25 @@ while ($true) {
 
     if ($lower.StartsWith('color ')) {
         $script:badgeRgb = Get-BadgeRgb $command.Substring(6)
-        if ($script:count -gt 0) { Publish -Value $script:count }
+        if ($script:count -gt 0 -or $script:ask) { Publish -Value 1 }
         else { Write-Output 'state=color-only' }
         [Console]::Out.Flush()
         continue
     }
 
+    try {
     switch ($lower) {
         'add' {
             $script:count++
+            Publish -Value $script:count
+        }
+        'ask' {
+            $script:ask = $true
+            Publish -Value 1
+        }
+        'askoff' {
+            if (-not $script:ask) { Write-Output 'state=no-ask'; break }
+            $script:ask = $false
             Publish -Value $script:count
         }
         'tick' {
@@ -237,10 +275,12 @@ while ($true) {
         }
         'clear' {
             $script:count = 0
+            $script:ask = $false
             Publish -Value 0
         }
         'quit' {
             $script:count = 0
+            $script:ask = $false
             Publish -Value 0
             Write-Output 'state=bye'
             exit 0
@@ -249,6 +289,11 @@ while ($true) {
         default {
             Write-Output "state=unknown-command"
         }
+    }
+    } catch {
+        # A drawing or window error must not take the helper down: the next
+        # command can still succeed, and a dead helper loses the overlay.
+        Write-Output "state=error $($_.Exception.Message)"
     }
     [Console]::Out.Flush()
 }

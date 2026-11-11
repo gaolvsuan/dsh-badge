@@ -12,7 +12,8 @@ The same red corner badge ChatGPT puts on its tab, for DeepSeek Harness: the unr
 
 - A badge on the tab icon showing the unread turn count (`99+` past 99)
 - The title becomes `(3) DeepSeek Harness`
-- On Windows the taskbar button gets the same numeric badge, cleared when the window returns to the foreground
+- When the model stops to ask something, the badge turns into an amber question mark and the title into `(?) DeepSeek Harness`, back to the count once answered
+- On Windows the taskbar button gets the same numeric badge or question mark, cleared when the window returns to the foreground
 - A chime when a turn finishes, three tones to choose from, with an optional lower alert for failed turns
 - The count clears about 1.2 seconds after the tab becomes visible again
 
