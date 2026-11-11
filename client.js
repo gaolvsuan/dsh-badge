@@ -337,6 +337,18 @@ window.__ModuleLoader__.load({
       playSound(kind || 'done')
     }
 
+    // The tab shows one question mark no matter how many sessions are waiting;
+    // the count underneath is kept so it returns once the answers are in.
+    function setAsking(count) {
+      var next = count > 0 ? count : 0
+      var changed = next > 0 !== (state.pending > 0)
+      state.pending = next
+      if (changed) {
+        paint()
+        applyTitle()
+      }
+    }
+
     function armAutoClear() {
       if (typeof document === 'undefined') return
       function maybeClear() {
@@ -368,7 +380,11 @@ window.__ModuleLoader__.load({
       var ids = snap.ids || []
       for (var i = 0; i < ids.length; i++) {
         var row = snap.byId[ids[i]]
-        if (row) prev.set(ids[i], snapshotRow(row))
+        if (!row) continue
+        // Child sessions are not the user's turns; they are left out of the
+        // bookkeeping entirely so nothing downstream has to special-case them.
+        if (row.origin === 'subagent' || row.parentId) continue
+        prev.set(ids[i], snapshotRow(row))
       }
 
       var unsubscribe = list.subscribe(function () {
@@ -420,12 +436,7 @@ window.__ModuleLoader__.load({
         prev.forEach(function (row) {
           if (row.pending) asking += 1
         })
-        var changed = asking > 0 !== (state.pending > 0)
-        state.pending = asking
-        if (changed) {
-          paint()
-          applyTitle()
-        }
+        setAsking(asking)
       })
 
       if (ctx && typeof ctx.effect === 'function') {
@@ -434,6 +445,56 @@ window.__ModuleLoader__.load({
             unsubscribe()
           }
         }, 'dsh-badge: session watch')
+      }
+    }
+
+    // A pending question or approval is not on the session rows: it lives on the
+    // uiSession service's status map. Reading the rows alone is why the tab
+    // never showed a question mark.
+    function bindInteractions(ctx, source) {
+      if (!source || typeof source.getSnapshot !== 'function') return
+      function apply() {
+        var snapshot = source.getSnapshot()
+        var asking = 0
+        if (snapshot && typeof snapshot.forEach === 'function') {
+          snapshot.forEach(function (status, id) {
+            if (!status || !status.pendingInteraction) return
+            if (!state.prev.has(id)) return
+            asking += 1
+          })
+        }
+        setAsking(asking)
+      }
+      apply()
+      if (typeof source.subscribe === 'function' && ctx && typeof ctx.effect === 'function') {
+        ctx.effect(function () {
+          return source.subscribe(apply)
+        }, 'dsh-badge: interactions')
+      }
+    }
+
+    function watchInteractions(ctx) {
+      if (!ctx) return
+      // Three ways in, cheapest first: the service may be reachable as a
+      // property, through get(), or only through a dynamic inject.
+      var direct = ctx.uiSession
+      if (direct && direct.sessionStatus) {
+        bindInteractions(ctx, direct.sessionStatus)
+        return
+      }
+      var ui = typeof ctx.get === 'function' ? ctx.get('uiSession') : null
+      if (ui && ui.sessionStatus) {
+        bindInteractions(ctx, ui.sessionStatus)
+        return
+      }
+      if (typeof ctx.inject !== 'function') return
+      try {
+        ctx.inject(['uiSession'], function (child) {
+          var service = (child && child.uiSession) || (child && child.get && child.get('uiSession'))
+          if (service && service.sessionStatus) bindInteractions(ctx, service.sessionStatus)
+        })
+      } catch (error) {
+        // Without the service the count still works; only "?" is lost.
       }
     }
 
@@ -543,7 +604,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.9.0', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.9.1', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -1117,6 +1178,7 @@ window.__ModuleLoader__.load({
 
       var sessions = ctx && typeof ctx.get === 'function' ? ctx.get('sessions') : null
       if (sessions) watchSessions(sessions, ctx)
+      watchInteractions(ctx)
 
       // A broken settings card must never cost the user the badge or the chime.
       try {

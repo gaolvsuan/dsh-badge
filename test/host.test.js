@@ -16,8 +16,8 @@ function createCtx() {
       if (!handlers.has(event)) handlers.set(event, [])
       handlers.get(event).push(fn)
     },
-    emit(event, payload) {
-      for (const fn of handlers.get(event) || []) fn(payload)
+    emit(event, ...payload) {
+      for (const fn of handlers.get(event) || []) fn(...payload)
     },
     effect(fn) {
       const disposer = fn()
@@ -292,14 +292,17 @@ test('a blocked turn asks on the taskbar', { skip: process.platform !== 'win32' 
 
   try {
     const agent = { session: { header: {} } }
+    const session = { header: { id: 'session-ask' } }
     ctx.emit('agent/status', { agent, status: 'running' })
-    ctx.emit('agent/status', { agent, status: 'blocked' })
+
+    // The host publishes a waiting turn as a session event, not a status.
+    ctx.emit('session/event', session, { type: 'approval/asked' })
 
     const asked = await waitFor(() => readLog(logPath).includes('state=asked'), 8_000)
     assert.ok(asked, `the taskbar never showed the question mark; log:\n${readLog(logPath)}`)
 
-    // Answering resumes the turn: the mark has to go away on its own.
-    ctx.emit('agent/status', { agent, status: 'running' })
+    // Answering closes the event: the mark has to go away on its own.
+    ctx.emit('session/event', session, { type: 'approval/decided' })
     const cleared = await waitFor(() => readLog(logPath).includes('state=cleared'), 8_000)
     assert.ok(cleared, `the question mark stayed after the answer; log:\n${readLog(logPath)}`)
   } finally {

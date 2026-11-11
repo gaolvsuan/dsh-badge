@@ -156,13 +156,44 @@ function createSessions() {
   }
 }
 
-function makeCtx(sessions) {
+function makeCtx(sessions, extra) {
   return {
     get(name) {
-      return name === 'sessions' ? sessions : null
+      if (name === 'sessions') return sessions
+      if (extra && name in extra) return extra[name]
+      return null
     },
     effect(fn) {
       return fn()
+    },
+  }
+}
+
+// The status map the real deployment keeps on the uiSession service.
+function createUiSession() {
+  const statuses = new Map()
+  let subscribers = []
+  return {
+    statuses,
+    subscribe(fn) {
+      subscribers.push(fn)
+      return () => {
+        subscribers = subscribers.filter((other) => other !== fn)
+      }
+    },
+    sessionStatus: {
+      getSnapshot: () => statuses,
+      subscribe(fn) {
+        subscribers.push(fn)
+        return () => {
+          subscribers = subscribers.filter((other) => other !== fn)
+        }
+      },
+    },
+    set(id, status) {
+      if (status === undefined) statuses.delete(id)
+      else statuses.set(id, status)
+      subscribers.slice().forEach((fn) => fn())
     },
   }
 }
@@ -482,14 +513,20 @@ test('turning the badge off puts the original icon back', async () => {
 test('a pending question switches the badge to a question mark', async () => {
   const { env, mod } = await loadClient()
   const sessions = createSessions()
-  mod.apply(makeCtx(sessions), { minTurnDurationMs: 0 })
+  const ui = createUiSession()
+  mod.apply(makeCtx(sessions, { uiSession: ui }), { minTurnDurationMs: 0 })
 
-  sessions.update('session-a', { pendingInteraction: { kind: 'question' } })
+  // The real status map, which is where a question actually shows up.
+  ui.set('session-a', { running: true, pendingInteraction: { kind: 'question' } })
   assert.equal(env.document.title, '(?) DeepSeek Harness')
   assert.equal(env.faviconWrites.length, 1)
 
   // Answering puts the tab back to the plain title, with no count invented.
-  sessions.update('session-a', { pendingInteraction: undefined })
+  ui.set('session-a', { running: true, pendingInteraction: undefined })
+  assert.equal(env.document.title, 'DeepSeek Harness')
+
+  // A child session waiting for something is not the user's tab state.
+  ui.set('session-sub', { running: true, pendingInteraction: { kind: 'question' } })
   assert.equal(env.document.title, 'DeepSeek Harness')
 })
 

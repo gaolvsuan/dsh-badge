@@ -111,16 +111,19 @@ function badgeColorOf(config) {
 // session — an Agent Team teammate included — carries `parentSession` and a
 // delegation depth above zero. The header uses those names, not the summary's
 // `parentSessionId`.
+function isChildHeader(header) {
+  if (!header) return false
+  if (header.origin === 'subagent') return true
+  if (header.parentSession) return true
+  if (header.parentSessionId) return true
+  if (header.parentId) return true
+  if (typeof header.delegationDepth === 'number' && header.delegationDepth > 0) return true
+  return false
+}
+
 function isChildAgent(agent) {
   try {
-    const header = agent && agent.session && agent.session.header
-    if (!header) return false
-    if (header.origin === 'subagent') return true
-    if (header.parentSession) return true
-    if (header.parentSessionId) return true
-    if (header.parentId) return true
-    if (typeof header.delegationDepth === 'number' && header.delegationDepth > 0) return true
-    return false
+    return isChildHeader(agent && agent.session && agent.session.header)
   } catch {
     return false
   }
@@ -265,25 +268,33 @@ function watchTurnsForTaskbar(ctx, config) {
   // accepted value as soon as the settings page writes it.
   const taskbarOn = () => readConfigValue(helperConfig || config, 'desktopBadge', true) !== false
 
-  // An agent that stops to ask something reports `blocked` while it waits. The
-  // taskbar says so with a question mark, which outranks the count on the tab
-  // for the same reason: nothing can move until the user answers.
-  const askingAgents = new Set()
+  // A turn that stops to ask reports it as a session event, not as an agent
+  // status: the host only ever publishes running and idle. `approval/asked`
+  // stays open until `approval/decided`, which is exactly the waiting window.
+  const askingSessions = new Set()
+
+  ctx.on('session/event', (session, event) => {
+    const type = event && event.type
+    if (type !== 'approval/asked' && type !== 'approval/decided') return
+    const sessionId = session && session.header && session.header.id
+    if (!sessionId) return
+    if (isChildHeader(session.header)) return
+
+    if (type === 'approval/asked') {
+      const first = askingSessions.size === 0
+      askingSessions.add(sessionId)
+      if (first && taskbarOn()) send('ask')
+      return
+    }
+
+    if (askingSessions.delete(sessionId) && askingSessions.size === 0 && taskbarOn()) send('askoff')
+  })
 
   ctx.on('agent/status', ({ agent, status }) => {
     // A subagent's turn is internal work the user never sees as a session, and
     // the browser half already skips those rows. Counting them here made the
     // taskbar number run ahead of the tab number.
     if (isChildAgent(agent)) return
-
-    if (status === 'blocked') {
-      const first = askingAgents.size === 0
-      askingAgents.add(agent)
-      if (first && taskbarOn()) send('ask')
-      return
-    }
-
-    if (askingAgents.delete(agent) && askingAgents.size === 0 && taskbarOn()) send('askoff')
 
     if (status === 'running') {
       startedAt.set(agent, Date.now())
@@ -305,9 +316,12 @@ function watchTurnsForTaskbar(ctx, config) {
 
   ctx.on('agent/disposed', ({ agent }) => {
     startedAt.delete(agent)
-    // A turn can be disposed while it is waiting for an answer; the set must not
-    // keep the agent around after that.
-    askingAgents.delete(agent)
+    // A turn can be disposed while a question is still open; the session id
+    // must not sit in the set forever.
+    const sessionId = agent && agent.session && agent.session.header && agent.session.header.id
+    if (sessionId && askingSessions.delete(sessionId) && askingSessions.size === 0 && taskbarOn()) {
+      send('askoff')
+    }
   })
 
   // Both switches are read live: a volatile reference reports the accepted
