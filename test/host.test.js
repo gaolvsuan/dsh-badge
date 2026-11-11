@@ -11,7 +11,21 @@ const indexPath = path.join(here, '..', 'index.js')
 function createCtx() {
   const handlers = new Map()
   const disposers = []
+  const routes = []
   return {
+    routes,
+    // The browser channel is an HTTP route on this deployment's web server.
+    inject(deps, fn) {
+      if (!deps.includes('webServer')) return
+      fn({
+        webServer: {
+          register(route) {
+            routes.push(route)
+            return () => {}
+          },
+        },
+      })
+    },
     on(event, fn) {
       if (!handlers.has(event)) handlers.set(event, [])
       handlers.get(event).push(fn)
@@ -305,6 +319,73 @@ test('a blocked turn asks on the taskbar', { skip: process.platform !== 'win32' 
     ctx.emit('session/event', session, { type: 'approval/decided' })
     const cleared = await waitFor(() => readLog(logPath).includes('state=cleared'), 8_000)
     assert.ok(cleared, `the question mark stayed after the answer; log:\n${readLog(logPath)}`)
+  } finally {
+    ctx.dispose()
+    fs.rmSync(logPath, { force: true })
+  }
+})
+
+test('the browser can ask the taskbar for a question mark', { skip: process.platform !== 'win32' }, async (t) => {
+  let mod
+  try {
+    mod = await import(pathToFileURL(indexPath).href)
+  } catch (error) {
+    t.skip(`host half needs @deepseek-ai/schemastery: ${error.message}`)
+    return
+  }
+
+  const logPath = path.join(os.tmpdir(), `dsh-badge-bridge-${process.pid}.log`)
+  fs.rmSync(logPath, { force: true })
+
+  const ctx = createCtx()
+  mod.apply(ctx, {
+    minTurnDurationMs: 0,
+    debugLog: logPath,
+    desktopBadgeClearOnFocus: false,
+  })
+
+  try {
+    const route = ctx.routes.find((entry) => entry.path === '/dsh-badge/api/asking')
+    assert.ok(route, 'the host must serve the browser channel')
+
+    const post = (body) => {
+      const listeners = {}
+      const req = {
+        method: 'POST',
+        headers: { 'sec-fetch-site': 'same-origin' },
+        socket: { remoteAddress: '127.0.0.1' },
+        on(event, fn) {
+          listeners[event] = fn
+        },
+      }
+      const res = { status: 0, writeHead(status) { this.status = status }, end() {} }
+      route.handler(req, res)
+      if (listeners.data) listeners.data(body)
+      if (listeners.end) listeners.end()
+      return res
+    }
+
+    assert.equal(post('{"asking":true}').status, 204)
+    const asked = await waitFor(() => readLog(logPath).includes('state=asked'), 8_000)
+    assert.ok(asked, `the bridge never reached the helper; log:\n${readLog(logPath)}`)
+
+    post('{"asking":false}')
+    const cleared = await waitFor(() => readLog(logPath).includes('state=cleared'), 8_000)
+    assert.ok(cleared, `the question mark stayed after the answer; log:\n${readLog(logPath)}`)
+
+    // Anything that is not this machine's own browser is refused.
+    const listeners = {}
+    const stranger = {
+      method: 'POST',
+      headers: {},
+      socket: { remoteAddress: '10.0.0.9' },
+      on(event, fn) {
+        listeners[event] = fn
+      },
+    }
+    const refused = { status: 0, writeHead(status) { this.status = status }, end() {} }
+    route.handler(stranger, refused)
+    assert.equal(refused.status, 403)
   } finally {
     ctx.dispose()
     fs.rmSync(logPath, { force: true })

@@ -268,10 +268,20 @@ function watchTurnsForTaskbar(ctx, config) {
   // accepted value as soon as the settings page writes it.
   const taskbarOn = () => readConfigValue(helperConfig || config, 'desktopBadge', true) !== false
 
-  // A turn that stops to ask reports it as a session event, not as an agent
-  // status: the host only ever publishes running and idle. `approval/asked`
-  // stays open until `approval/decided`, which is exactly the waiting window.
-  const askingSessions = new Set()
+  // Two sources can mean "the user is being asked something": an approval, which
+  // the host sees as a session event pair, and anything the browser knows about
+  // — a question card, for instance — which the host cannot see at all.
+  const approvalSessions = new Set()
+  let browserAsking = false
+  let asking = false
+
+  function publishAsking() {
+    const now = browserAsking || approvalSessions.size > 0
+    if (now === asking) return
+    asking = now
+    if (!taskbarOn()) return
+    send(now ? 'ask' : 'askoff')
+  }
 
   ctx.on('session/event', (session, event) => {
     const type = event && event.type
@@ -280,15 +290,57 @@ function watchTurnsForTaskbar(ctx, config) {
     if (!sessionId) return
     if (isChildHeader(session.header)) return
 
-    if (type === 'approval/asked') {
-      const first = askingSessions.size === 0
-      askingSessions.add(sessionId)
-      if (first && taskbarOn()) send('ask')
-      return
-    }
-
-    if (askingSessions.delete(sessionId) && askingSessions.size === 0 && taskbarOn()) send('askoff')
+    if (type === 'approval/asked') approvalSessions.add(sessionId)
+    else approvalSessions.delete(sessionId)
+    publishAsking()
   })
+
+  // The browser half posts the aggregate here. It is the only channel from the
+  // page to this process, and a question never reaches the host any other way.
+  function watchBrowserAsking(browserCtx) {
+    if (!browserCtx || typeof browserCtx.inject !== 'function') return
+    try {
+      browserCtx.inject(['webServer'], (child) => {
+        const server = child && child.webServer
+        if (!server || typeof server.register !== 'function') return
+        const dispose = server.register({
+          kind: 'exact',
+          path: '/dsh-badge/api/asking',
+          handler: (req, res) => {
+            const peer = req.socket && req.socket.remoteAddress
+            const sameSite = req.headers['sec-fetch-site'] !== 'cross-site'
+            const loopback = peer === '127.0.0.1' || peer === '::1' || peer === '::ffff:127.0.0.1'
+            if (req.method !== 'POST' || !sameSite || !loopback) {
+              res.writeHead(req.method === 'POST' ? 403 : 405)
+              res.end()
+              return
+            }
+            let body = ''
+            req.on('data', (chunk) => {
+              body += chunk
+              // The payload is one boolean; anything larger is not us.
+              if (body.length > 512) req.destroy()
+            })
+            req.on('end', () => {
+              try {
+                browserAsking = JSON.parse(body).asking === true
+              } catch {
+                res.writeHead(400)
+                res.end()
+                return
+              }
+              publishAsking()
+              res.writeHead(204)
+              res.end()
+            })
+          },
+        })
+        browserCtx.effect(() => () => dispose())
+      })
+    } catch {
+      // No web server in this deployment: the tab still shows the question mark.
+    }
+  }
 
   ctx.on('agent/status', ({ agent, status }) => {
     // A subagent's turn is internal work the user never sees as a session, and
@@ -316,12 +368,10 @@ function watchTurnsForTaskbar(ctx, config) {
 
   ctx.on('agent/disposed', ({ agent }) => {
     startedAt.delete(agent)
-    // A turn can be disposed while a question is still open; the session id
+    // A turn can be disposed while an approval is still open; the session id
     // must not sit in the set forever.
     const sessionId = agent && agent.session && agent.session.header && agent.session.header.id
-    if (sessionId && askingSessions.delete(sessionId) && askingSessions.size === 0 && taskbarOn()) {
-      send('askoff')
-    }
+    if (sessionId && approvalSessions.delete(sessionId)) publishAsking()
   })
 
   // Both switches are read live: a volatile reference reports the accepted
@@ -360,6 +410,8 @@ function watchTurnsForTaskbar(ctx, config) {
   }, 800)
   if (typeof tick.unref === 'function') tick.unref()
   ctx.effect(() => () => clearInterval(tick))
+
+  watchBrowserAsking(ctx)
 
   ctx.effect(() => () => stopHelper())
 }

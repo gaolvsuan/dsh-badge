@@ -93,6 +93,12 @@ function createEnv(options = {}) {
       },
     },
     addEventListener() {},
+    // The browser half posts the asking flag to the host through this route.
+    fetch(url, init) {
+      window.fetchCalls.push({ url, body: init && init.body })
+      return Promise.resolve({ ok: true })
+    },
+    fetchCalls: [],
   }
 
   class FakeImage {
@@ -528,6 +534,14 @@ test('a pending question switches the badge to a question mark', async () => {
   // A child session waiting for something is not the user's tab state.
   ui.set('session-sub', { running: true, pendingInteraction: { kind: 'question' } })
   assert.equal(env.document.title, 'DeepSeek Harness')
+
+  // The host cannot see a question card, so the flag is posted to it: once at
+  // startup (clearing anything left from a previous page), then on each change.
+  assert.deepEqual(
+    env.window.fetchCalls.map((call) => call.body),
+    ['{"asking":false}', '{"asking":true}', '{"asking":false}'],
+  )
+  assert.match(env.window.fetchCalls[1].url, /dsh-badge\/api\/asking$/)
 })
 
 test('a title the app owns keeps its own count', async () => {

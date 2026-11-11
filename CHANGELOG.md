@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2
+
+- 任务栏问号现在也覆盖模型提问：浏览器半边把「有没有在等回答」POST 到宿主路由 `/dsh-badge/api/asking`，宿主据此画问号
+- 该路由只接受本机回环地址、同源、JSON 的 POST，其他请求返回 403/405
+
 ## 0.9.1
 
 - 修复：问号不显示。待回答的问题不在会话列表上，而在 `uiSession` 服务的状态表里；宿主也没有 `blocked` 状态，改成监听 `approval/asked` / `approval/decided` 会话事件

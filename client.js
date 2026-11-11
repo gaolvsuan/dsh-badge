@@ -33,6 +33,7 @@ window.__ModuleLoader__.load({
     var state = {
       unread: 0,
       pending: 0,
+      reportedAsking: null,
       baseIcon: null,
       baseIconLoaded: false,
       baseHref: null,
@@ -341,11 +342,36 @@ window.__ModuleLoader__.load({
     // the count underneath is kept so it returns once the answers are in.
     function setAsking(count) {
       var next = count > 0 ? count : 0
-      var changed = next > 0 !== (state.pending > 0)
+      var open = next > 0
+      var changed = open !== (state.pending > 0)
       state.pending = next
       if (changed) {
         paint()
         applyTitle()
+      }
+      // A question card never reaches the host process, so the taskbar learns
+      // about it here. One boolean per transition, and only when it changes.
+      if (open !== state.reportedAsking) {
+        state.reportedAsking = open
+        reportAsking(open)
+      }
+    }
+
+    function reportAsking(open) {
+      try {
+        if (typeof window === 'undefined' || typeof window.fetch !== 'function') return
+        var pending = window.fetch('/dsh-badge/api/asking', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ asking: open }),
+          keepalive: true,
+        })
+        if (pending && typeof pending.then === 'function') {
+          pending.then(function () {}, function () {})
+        }
+      } catch (error) {
+        // No host route (older deployment, or a non-web client): the tab still
+        // shows the question mark.
       }
     }
 
@@ -604,7 +630,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.9.1', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.9.2', reason: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
