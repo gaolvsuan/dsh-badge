@@ -606,3 +606,131 @@ test('a missing configForms service never breaks the badge', async () => {
 
   assert.equal(env.window.__DSH_BADGE__.getCount(), 1)
 })
+
+/* ------------------------------------------------------------- failed entry */
+
+/**
+ * The boot failure this file exists for: cordis answers `ctx.someService` with
+ * `Error: cannot get property "someService" without inject` for every name the
+ * plugin did not declare, and a throw from apply turns the entry into
+ * "did not activate" — the whole page refuses to boot on 0.2.x.
+ */
+function makeCordisCtx(services, options = {}) {
+  const base = {
+    get(name) {
+      if (options.getThrows) throw new Error('cannot get service store')
+      return services[name]
+    },
+    effect(fn) {
+      if (options.effectThrows) throw new Error('effect disposed')
+      return fn()
+    },
+    // A real dynamic inject never calls back when the service is absent.
+    inject() {},
+  }
+  const injected = options.injected || ['sessions']
+  return new Proxy(base, {
+    get(target, prop) {
+      if (prop in target) return target[prop]
+      if (typeof prop !== 'string') return undefined
+      if (prop === 'then') return undefined
+      if (injected.includes(prop)) return services[prop]
+      throw new Error(`cannot get property "${prop}" without inject`)
+    },
+  })
+}
+
+test('the entry declares only the service it cannot work without', async () => {
+  const { mod } = await loadClient()
+  assert.deepEqual(
+    mod.inject,
+    ['sessions'],
+    'a longer inject list parks the entry in pending when a host drops a name',
+  )
+})
+
+test('a context that throws on service properties never fails apply', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = createSessions()
+
+  // uiSession is not in the inject list: the old `ctx.uiSession` read threw here.
+  assert.doesNotThrow(() => mod.apply(makeCordisCtx({ sessions }), { minTurnDurationMs: 0 }))
+
+  sessions.update('session-a', { running: true })
+  sessions.update('session-a', { running: false })
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 1, 'the count still works without uiSession')
+  assert.equal(env.window.__DSH_BADGE__.diag.lastError, '', 'no step reported a failure')
+})
+
+test('a snapshot that is not ready yet is picked up on the next update', async () => {
+  const { env, mod } = await loadClient()
+  const rows = {
+    'session-a': { id: 'session-a', running: false, pendingInteraction: undefined, origin: 'user' },
+  }
+  const listeners = []
+  let ready = false
+
+  const sessions = {
+    list: {
+      getSnapshot() {
+        return ready ? { ids: Object.keys(rows), byId: rows } : undefined
+      },
+      subscribe(fn) {
+        listeners.push(fn)
+        return () => {}
+      },
+    },
+  }
+
+  assert.doesNotThrow(() => mod.apply(makeCordisCtx({ sessions }), { minTurnDurationMs: 0 }))
+
+  ready = true
+  rows['session-a'].running = true
+  listeners.forEach((fn) => fn())
+  rows['session-a'].running = false
+  listeners.forEach((fn) => fn())
+
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 1)
+})
+
+test('a snapshot without byId is treated as an empty list', async () => {
+  const { env, mod } = await loadClient()
+  const sessions = {
+    list: {
+      getSnapshot: () => ({ ids: ['session-a'] }),
+      subscribe: () => () => {},
+    },
+  }
+
+  assert.doesNotThrow(() => mod.apply(makeCordisCtx({ sessions }), { minTurnDurationMs: 0 }))
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 0)
+})
+
+test('a service store that throws still leaves a usable badge', async () => {
+  const { env, mod } = await loadClient()
+
+  assert.doesNotThrow(() =>
+    mod.apply(makeCordisCtx({}, { getThrows: true, injectThrows: true }), { minTurnDurationMs: 0 }),
+  )
+
+  // The manual API is published before the wiring, so a report of a dead badge
+  // still has something to read.
+  assert.ok(env.window.__DSH_BADGE__, 'the console handle survives a broken store')
+  env.window.__DSH_BADGE__.test(2)
+  assert.equal(env.window.__DSH_BADGE__.getCount(), 2)
+  assert.match(env.window.__DSH_BADGE__.diag.lastError, /get /, 'the failed step is named')
+})
+
+test('a store that throws during subscribe never fails apply', async () => {
+  const { mod } = await loadClient()
+  const sessions = {
+    list: {
+      getSnapshot: () => ({ ids: [], byId: {} }),
+      subscribe() {
+        throw new Error('store closed')
+      },
+    },
+  }
+
+  assert.doesNotThrow(() => mod.apply(makeCordisCtx({ sessions }), { minTurnDurationMs: 0 }))
+})

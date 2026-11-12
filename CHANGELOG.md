@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.3
+
+- 修复：客户端条目激活失败，`web boot` 报 `1 entry did not activate`（0.2.2-rc.1 上会直接打断整个 Web 启动）。根因是 `watchInteractions` 里直接读 `ctx.uiSession`：cordis 对不在 `inject` 名单里的服务名会抛 `cannot get property "uiSession" without inject`，异常从 `apply` 冒出去就变 `failed`。改成 `ctx.get()` 加动态 inject 两条都不会抛的路径
+- 修复：`apply` 整体加异常边界，并且每个子步骤单独隔离 —— 一个坏设置、一个缺失的服务不再连累角标和提示音
+- 修复：`window.__DSH_BADGE__` 提前发布，接入失败时控制台仍有句柄可查（`__DSH_BADGE__.diag.lastError` 会写明是哪一步、什么错）
+- 修复：会话快照防空。`getSnapshot()` 返回 `undefined`、快照缺 `byId`、订阅回调里抛错，都不再让条目失效
+- 修复：`inject` 从 `['sessions','slots','locale']` 收窄到 `['sessions']`。cordis 会把缺依赖的条目挂在 `pending`，同样算「没有激活」；`slots`/`locale`/`configForms` 改为运行时可选读取，缺了只掉设置卡片
+
 ## 0.9.2
 
 - 任务栏问号现在也覆盖模型提问：浏览器半边把「有没有在等回答」POST 到宿主路由 `/dsh-badge/api/asking`，宿主据此画问号

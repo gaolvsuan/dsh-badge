@@ -21,7 +21,12 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var exports = module.exports
 
-    var inject = ['sessions', 'slots', 'locale']
+    // Only the service the badge cannot live without is declared here: cordis
+    // parks a fiber in `pending` until every injected name resolves, and a
+    // pending entry is reported as "did not activate". Everything optional is
+    // read at runtime instead, so a host that renames `slots` or `locale` costs
+    // the settings card, not the badge.
+    var inject = ['sessions']
 
     var ICON_SIZE = 64
     var BRAND_COLOR = '#4d6bfe'
@@ -42,6 +47,51 @@ window.__ModuleLoader__.load({
       audio: null,
       cfg: null,
       prev: new Map(),
+    }
+
+    /* ---------------------------------------------------------------- guards */
+
+    // A cordis context throws on `ctx.someService` unless that name is in the
+    // plugin's inject list; ctx.get() is the read that returns undefined
+    // instead. Everything optional is read here, so a missing service costs one
+    // feature and never the whole entry.
+    function service(ctx, name) {
+      if (!ctx) return null
+      try {
+        if (typeof ctx.get === 'function') {
+          var viaGet = ctx.get(name)
+          if (viaGet) return viaGet
+        }
+      } catch (error) {
+        noteError('get ' + name, error)
+      }
+      try {
+        return ctx[name] || null
+      } catch (error) {
+        return null
+      }
+    }
+
+    // The console keeps the reason the last step gave up on, so a report of
+    // "the badge is gone" can be answered without a rebuild.
+    function noteError(stage, error) {
+      DIAG.lastError = stage + ': ' + (error && error.message ? error.message : String(error))
+      DIAG.reason = DIAG.reason || DIAG.lastError
+      try {
+        if (typeof console !== 'undefined' && console.warn) console.warn('dsh-badge: ' + DIAG.lastError)
+      } catch (ignored) {
+        // No console (a test or a non-page runtime): the field is still there.
+      }
+    }
+
+    // One failing step must not skip the ones after it: a bad sound preset
+    // cannot be allowed to cost the count.
+    function step(label, fn) {
+      try {
+        return fn()
+      } catch (error) {
+        noteError(label, error)
+      }
     }
 
     /* ---------------------------------------------------------------- config */
@@ -395,17 +445,40 @@ window.__ModuleLoader__.load({
       return { pending: row.pendingInteraction, running: !!row.running, runningSince: 0 }
     }
 
+    // The session list is a service from another fiber: its snapshot can be
+    // missing (the store has not published yet) or partial (ids without byId).
+    // Reading it defensively is what keeps apply() from throwing on boot.
     function watchSessions(sessions, ctx) {
-      var list = sessions.list
+      var list = sessions && sessions.list
       if (!list || typeof list.getSnapshot !== 'function' || typeof list.subscribe !== 'function') {
-        return
+        return false
       }
 
       var prev = state.prev
-      var snap = list.getSnapshot()
-      var ids = snap.ids || []
+
+      function read() {
+        try {
+          return list.getSnapshot() || {}
+        } catch (error) {
+          noteError('sessions snapshot', error)
+          return {}
+        }
+      }
+
+      function idsOf(snap) {
+        return snap && snap.ids ? snap.ids : []
+      }
+
+      function rowOf(snap, id) {
+        return (snap && snap.byId && snap.byId[id]) || null
+      }
+
+      // First pass only records where each session stands; nothing has finished
+      // yet, so nothing is counted.
+      var first = read()
+      var ids = idsOf(first)
       for (var i = 0; i < ids.length; i++) {
-        var row = snap.byId[ids[i]]
+        var row = rowOf(first, ids[i])
         if (!row) continue
         // Child sessions are not the user's turns; they are left out of the
         // bookkeeping entirely so nothing downstream has to special-case them.
@@ -413,12 +486,12 @@ window.__ModuleLoader__.load({
         prev.set(ids[i], snapshotRow(row))
       }
 
-      var unsubscribe = list.subscribe(function () {
-        var next = list.getSnapshot()
-        var nextIds = next.ids || []
+      function sync() {
+        var next = read()
+        var nextIds = idsOf(next)
         for (var j = 0; j < nextIds.length; j++) {
           var id = nextIds[j]
-          var item = next.byId[id]
+          var item = rowOf(next, id)
           if (!item) continue
           // A child session is not a turn the user started: subagents carry
           // origin "subagent", and an Agent Team teammate carries a parent id
@@ -459,19 +532,39 @@ window.__ModuleLoader__.load({
         // One question on any session is enough to switch the tab to "?"; the
         // count underneath is kept so it reappears once the answer is in.
         var asking = 0
-        prev.forEach(function (row) {
-          if (row.pending) asking += 1
+        prev.forEach(function (entry) {
+          if (entry.pending) asking += 1
         })
         setAsking(asking)
-      })
-
-      if (ctx && typeof ctx.effect === 'function') {
-        ctx.effect(function () {
-          return function () {
-            unsubscribe()
-          }
-        }, 'dsh-badge: session watch')
       }
+
+      // A throwing listener would propagate into the store's notify loop and
+      // take every other subscriber with it.
+      var unsubscribe = null
+      try {
+        unsubscribe = list.subscribe(function () {
+          try {
+            sync()
+          } catch (error) {
+            noteError('sessions update', error)
+          }
+        })
+      } catch (error) {
+        noteError('sessions subscribe', error)
+      }
+
+      if (ctx && typeof ctx.effect === 'function' && typeof unsubscribe === 'function') {
+        step('session watch', function () {
+          ctx.effect(function () {
+            return function () {
+              try {
+                unsubscribe()
+              } catch (error) {}
+            }
+          }, 'dsh-badge: session watch')
+        })
+      }
+      return true
     }
 
     // A pending question or approval is not on the session rows: it lives on the
@@ -479,49 +572,58 @@ window.__ModuleLoader__.load({
     // never showed a question mark.
     function bindInteractions(ctx, source) {
       if (!source || typeof source.getSnapshot !== 'function') return
-      function apply() {
-        var snapshot = source.getSnapshot()
-        var asking = 0
-        if (snapshot && typeof snapshot.forEach === 'function') {
-          snapshot.forEach(function (status, id) {
-            if (!status || !status.pendingInteraction) return
-            if (!state.prev.has(id)) return
-            asking += 1
-          })
+      function refresh() {
+        try {
+          var snapshot = source.getSnapshot()
+          var asking = 0
+          if (snapshot && typeof snapshot.forEach === 'function') {
+            snapshot.forEach(function (status, id) {
+              if (!status || !status.pendingInteraction) return
+              if (!state.prev.has(id)) return
+              asking += 1
+            })
+          }
+          setAsking(asking)
+        } catch (error) {
+          noteError('interactions update', error)
         }
-        setAsking(asking)
       }
-      apply()
-      if (typeof source.subscribe === 'function' && ctx && typeof ctx.effect === 'function') {
+      refresh()
+      if (typeof source.subscribe !== 'function' || !ctx || typeof ctx.effect !== 'function') return
+      step('interactions watch', function () {
         ctx.effect(function () {
-          return source.subscribe(apply)
+          try {
+            var off = source.subscribe(refresh)
+            return typeof off === 'function' ? off : function () {}
+          } catch (error) {
+            noteError('interactions subscribe', error)
+            return function () {}
+          }
         }, 'dsh-badge: interactions')
-      }
+      })
     }
 
     function watchInteractions(ctx) {
       if (!ctx) return
-      // Three ways in, cheapest first: the service may be reachable as a
-      // property, through get(), or only through a dynamic inject.
-      var direct = ctx.uiSession
+      // Never read `ctx.uiSession` directly: cordis throws
+      // `cannot get property "uiSession" without inject` for any name outside
+      // the inject list, and that throw became a failed entry on boot.
+      var direct = service(ctx, 'uiSession')
       if (direct && direct.sessionStatus) {
         bindInteractions(ctx, direct.sessionStatus)
         return
       }
-      var ui = typeof ctx.get === 'function' ? ctx.get('uiSession') : null
-      if (ui && ui.sessionStatus) {
-        bindInteractions(ctx, ui.sessionStatus)
-        return
-      }
       if (typeof ctx.inject !== 'function') return
-      try {
+      step('interactions inject', function () {
         ctx.inject(['uiSession'], function (child) {
-          var service = (child && child.uiSession) || (child && child.get && child.get('uiSession'))
-          if (service && service.sessionStatus) bindInteractions(ctx, service.sessionStatus)
+          try {
+            var live = service(child, 'uiSession')
+            if (live && live.sessionStatus) bindInteractions(ctx, live.sessionStatus)
+          } catch (error) {
+            noteError('interactions inject', error)
+          }
         })
-      } catch (error) {
-        // Without the service the count still works; only "?" is lost.
-      }
+      })
     }
 
     /* --------------------------------------------------------------- settings */
@@ -630,7 +732,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.9.2', reason: '', served: null, registered: false }
+    var DIAG = { build: '0.9.3', reason: '', lastError: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -650,9 +752,12 @@ window.__ModuleLoader__.load({
     }
 
     function mountSettingsCard(ctx) {
-      var configForms = ctx.configForms
-      var slots = ctx.slots
-      var locale = ctx.locale
+      // `configForms` only exists on the injected child; `slots` and `locale`
+      // are ordinary services the parent fiber no longer requires, so both are
+      // read through the non-throwing lookup.
+      var configForms = service(ctx, 'configForms')
+      var slots = service(ctx, 'slots')
+      var locale = service(ctx, 'locale')
       if (!configForms || !slots || !locale) {
         DIAG.reason = 'missing service: ' + [!configForms && 'configForms', !slots && 'slots', !locale && 'locale'].filter(Boolean).join(',')
         return
@@ -1192,25 +1297,69 @@ window.__ModuleLoader__.load({
 
     /* ------------------------------------------------------------------ apply */
 
+    // A client entry that throws is reported as "did not activate" and the whole
+    // page refuses to boot on 0.2.x. Nothing below is allowed to escape.
     function apply(ctx, config) {
+      try {
+        applyInner(ctx, config)
+      } catch (error) {
+        noteError('apply', error)
+      }
+    }
+
+    function applyInner(ctx, config) {
       var cfg = readConfig(config)
       if (!cfg.enabled) return
       if (typeof document === 'undefined') return
 
       state.cfg = cfg
-      loadBaseIcon()
-      armAudio()
-      armAutoClear()
+      // Published before the wiring: whatever fails below, the console keeps a
+      // handle on the plugin and on the reason it gave up.
+      exposeApi()
 
-      var sessions = ctx && typeof ctx.get === 'function' ? ctx.get('sessions') : null
-      if (sessions) watchSessions(sessions, ctx)
-      watchInteractions(ctx)
-
+      step('icon', loadBaseIcon)
+      step('audio', armAudio)
+      step('autoclear', armAutoClear)
+      step('sessions', function () {
+        armSessions(ctx)
+      })
+      step('interactions', function () {
+        watchInteractions(ctx)
+      })
       // A broken settings card must never cost the user the badge or the chime.
-      try {
+      step('settings', function () {
         setupSettingsCard(ctx)
-      } catch (error) {}
+      })
+    }
 
+    // The session service is the one thing the badge cannot work without, so it
+    // is fetched now and, if this build registers it later, once more through a
+    // dynamic inject instead of parking the whole entry in `pending`.
+    function armSessions(ctx) {
+      var bound = false
+
+      function bind(sessions, source) {
+        if (bound) return
+        if (watchSessions(sessions, source)) bound = true
+      }
+
+      var now = service(ctx, 'sessions')
+      if (now && now.list) {
+        bind(now, ctx)
+        return
+      }
+      if (!ctx || typeof ctx.inject !== 'function') return
+      ctx.inject(['sessions'], function (child) {
+        try {
+          var late = service(child, 'sessions')
+          if (late && late.list) bind(late, child)
+        } catch (error) {
+          noteError('sessions inject', error)
+        }
+      })
+    }
+
+    function exposeApi() {
       // Manual hooks: `__DSH_BADGE__.test(3)` in the devtools console,
       // and the same surface the demo page drives.
       window.__DSH_BADGE__ = {
