@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.4
+
+- 修复：设置卡片可能不挂载。0.9.3 把 `slots`/`locale` 从插件级 `inject` 里拿掉之后，卡片仍用属性读取，而这两个名字在那个上下文里已经不再是合法属性；改为把 `configForms`/`slots`/`locale` 一起放进卡片自己的 `ctx.inject`，在回调里按属性读。实测 0.2.2-rc.2 上 `diag.registered=true`、`served` 含 `badge`
+- 修复：每次设置保存（插件重载）都会再挂一对 `pointerdown`/`keydown` 和一对 `visibilitychange`/`focus` 监听。这些监听属于 window/document，不随 fiber 销毁，长时间开着窗口反复改设置会持续堆积。改成模块级只挂一次
+
 ## 0.9.3
 
 - 修复：客户端条目激活失败，`web boot` 报 `1 entry did not activate`（0.2.2-rc.1 上会直接打断整个 Web 启动）。根因是 `watchInteractions` 里直接读 `ctx.uiSession`：cordis 对不在 `inject` 名单里的服务名会抛 `cannot get property "uiSession" without inject`，异常从 `apply` 冒出去就变 `failed`。改成 `ctx.get()` 加动态 inject 两条都不会抛的路径

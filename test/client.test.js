@@ -44,6 +44,9 @@ function makeContext2d() {
 
 function createEnv(options = {}) {
   const faviconWrites = []
+  // Every addEventListener lands here: the badge re-arms on each settings
+  // reload, and a stacking listener is only visible by counting them.
+  const listenerAdds = []
   const baseHref = 'data:image/svg+xml;base64,BASE'
 
   const link = {
@@ -82,7 +85,9 @@ function createEnv(options = {}) {
     querySelector(selector) {
       return String(selector).includes('icon') ? link : null
     },
-    addEventListener() {},
+    addEventListener(type) {
+      listenerAdds.push('document:' + type)
+    },
   }
   link.parentNode = head
 
@@ -92,7 +97,9 @@ function createEnv(options = {}) {
         window.__dshModule = mod
       },
     },
-    addEventListener() {},
+    addEventListener(type) {
+      listenerAdds.push('window:' + type)
+    },
     // The browser half posts the asking flag to the host through this route.
     fetch(url, init) {
       window.fetchCalls.push({ url, body: init && init.body })
@@ -125,6 +132,7 @@ function createEnv(options = {}) {
     Image: FakeImage,
     Audio: FakeAudio,
     faviconWrites,
+    listenerAdds,
     baseHref,
     link,
   }
@@ -733,4 +741,22 @@ test('a store that throws during subscribe never fails apply', async () => {
   }
 
   assert.doesNotThrow(() => mod.apply(makeCordisCtx({ sessions }), { minTurnDurationMs: 0 }))
+})
+
+/* ------------------------------------------------------------- reload leaks */
+
+test('a settings reload does not stack window listeners', async () => {
+  const { env, mod } = await loadClient()
+
+  mod.apply(makeCtx(createSessions()), { minTurnDurationMs: 0 })
+  const afterFirst = env.listenerAdds.length
+  assert.ok(afterFirst > 0, 'the audio and auto-clear listeners are armed once')
+
+  // A settings write re-applies the plugin with a fresh context. These
+  // listeners belong to window/document and outlive the fiber, so a second
+  // apply must not add another pair.
+  mod.apply(makeCtx(createSessions()), { minTurnDurationMs: 0 })
+  mod.apply(makeCtx(createSessions()), { minTurnDurationMs: 0 })
+
+  assert.deepEqual(env.listenerAdds, env.listenerAdds.slice(0, afterFirst), 'no listener added on reload')
 })

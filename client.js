@@ -45,6 +45,8 @@ window.__ModuleLoader__.load({
       badgePainted: false,
       iconLink: null,
       audio: null,
+      audioArmed: false,
+      autoClearArmed: false,
       cfg: null,
       prev: new Map(),
     }
@@ -67,6 +69,23 @@ window.__ModuleLoader__.load({
       }
       try {
         return ctx[name] || null
+      } catch (error) {
+        return null
+      }
+    }
+
+    // Same read, but for names that ARE in the calling context's inject list:
+    // the property is the normal way in, and ctx.get() is only the fallback.
+    function injected(ctx, name) {
+      if (!ctx) return null
+      try {
+        var viaProperty = ctx[name]
+        if (viaProperty) return viaProperty
+      } catch (error) {
+        // Not injected here after all; try the store.
+      }
+      try {
+        return (typeof ctx.get === 'function' ? ctx.get(name) : null) || null
       } catch (error) {
         return null
       }
@@ -284,12 +303,20 @@ window.__ModuleLoader__.load({
 
     // Browsers block audio until the user interacts with the page. Resume on
     // the first gesture and keep listening only until it works once.
+    //
+    // Armed at module level, not per apply: a settings write reloads the entry,
+    // and run again this would stack a fresh pair of window listeners on every
+    // write. Nothing here is disposed by the fiber, so the guard is the fix.
     function armAudio() {
+      if (state.audioArmed) return
+      state.audioArmed = true
+
       function unlock() {
         var ac = ensureAudio()
         if (ac && ac.state === 'running') {
           window.removeEventListener('pointerdown', unlock, true)
           window.removeEventListener('keydown', unlock, true)
+          state.audioArmed = false
         }
       }
       window.addEventListener('pointerdown', unlock, true)
@@ -427,6 +454,11 @@ window.__ModuleLoader__.load({
 
     function armAutoClear() {
       if (typeof document === 'undefined') return
+      // Same reason as armAudio: these listeners outlive the fiber, so arming
+      // them again on every settings reload would stack one more pair each time.
+      if (state.autoClearArmed) return
+      state.autoClearArmed = true
+
       function maybeClear() {
         if (!state.cfg || !state.cfg.clearOnFocus) return
         if (document.visibilityState !== 'visible') return
@@ -732,7 +764,7 @@ window.__ModuleLoader__.load({
 
     // Why the settings form is or is not on screen. Read it from the devtools
     // console with `__DSH_BADGE__.diag` when the page shows nothing.
-    var DIAG = { build: '0.9.3', reason: '', lastError: '', served: null, registered: false }
+    var DIAG = { build: '0.9.4', reason: '', lastError: '', served: null, registered: false }
 
     // `configForms` is not reachable as a property or through ctx.get; the
     // documented way is a dynamic inject, which hands back a child context
@@ -742,7 +774,11 @@ window.__ModuleLoader__.load({
         DIAG.reason = 'ctx.inject missing'
         return
       }
-      ctx.inject(['configForms'], function (child) {
+      // All three names are injected here, so the callback may read them as
+      // properties. They are no longer in the plugin-wide inject list (a missing
+      // one must not park the whole entry in `pending`); the card still needs
+      // them, and this is the scoped way to ask for them.
+      ctx.inject(['configForms', 'slots', 'locale'], function (child) {
         try {
           mountSettingsCard(child)
         } catch (error) {
@@ -752,12 +788,9 @@ window.__ModuleLoader__.load({
     }
 
     function mountSettingsCard(ctx) {
-      // `configForms` only exists on the injected child; `slots` and `locale`
-      // are ordinary services the parent fiber no longer requires, so both are
-      // read through the non-throwing lookup.
-      var configForms = service(ctx, 'configForms')
-      var slots = service(ctx, 'slots')
-      var locale = service(ctx, 'locale')
+      var configForms = injected(ctx, 'configForms')
+      var slots = injected(ctx, 'slots')
+      var locale = injected(ctx, 'locale')
       if (!configForms || !slots || !locale) {
         DIAG.reason = 'missing service: ' + [!configForms && 'configForms', !slots && 'slots', !locale && 'locale'].filter(Boolean).join(',')
         return
